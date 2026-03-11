@@ -1,4 +1,34 @@
+import { useEffect, useState } from 'react'
+
 function App(): React.JSX.Element {
+  const [metaText, setMetaText] = useState('Loading runtime metadata...')
+
+  useEffect(() => {
+    let mounted = true
+
+    const load = async (): Promise<void> => {
+      try {
+        const [meta, ping] = await Promise.all([window.api.getAppMeta(), window.api.ping()])
+        if (!mounted) {
+          return
+        }
+        setMetaText(
+          `${meta.name} v${meta.version} on ${meta.platform} (ipc ok: ${ping.ok ? 'yes' : 'no'})`
+        )
+      } catch {
+        if (mounted) {
+          setMetaText('IPC unavailable')
+        }
+      }
+    }
+
+    load()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   return (
     <div className="h-screen bg-slate-950 text-slate-100">
       <div className="grid h-full grid-rows-[1fr_220px]">
@@ -18,6 +48,7 @@ function App(): React.JSX.Element {
                 Foundation scaffold is ready. Secure IPC, persistence, and MCP session features are
                 next.
               </p>
+              <p className="mt-3 text-xs text-slate-500">{metaText}</p>
             </div>
           </main>
         </div>
