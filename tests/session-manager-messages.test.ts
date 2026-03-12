@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => {
   return {
     countSessionMessages: vi.fn(() => 0),
+    listSessionSummaries: vi.fn(),
     listSessionMessages: vi.fn(),
     getSessionRecord: vi.fn(),
     insertSessionMessage: vi.fn(),
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('../src/main/persistence/sessionsRepo', () => ({
   countSessionMessages: mocks.countSessionMessages,
+  listSessionSummaries: mocks.listSessionSummaries,
   listSessionMessages: mocks.listSessionMessages,
   getSessionRecord: mocks.getSessionRecord,
   insertSessionMessage: mocks.insertSessionMessage,
@@ -80,5 +82,57 @@ describe('SessionManager getMessages', () => {
       expect((error as AppError).code).toBe('SESSION_NOT_FOUND')
     }
     expect(mocks.listSessionMessages).not.toHaveBeenCalled()
+  })
+})
+
+describe('SessionManager listSessions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('maps repository summaries into shared session summary shape', () => {
+    mocks.listSessionSummaries.mockReturnValue([
+      {
+        sessionId: 'session-1',
+        transport: 'stdio',
+        state: 'ready',
+        error: null,
+        connectedAt: '2025-01-01T00:00:00.000Z',
+        disconnectedAt: null,
+        messageCount: 4
+      },
+      {
+        sessionId: 'session-2',
+        transport: 'stdio',
+        state: 'error',
+        error: 'boom',
+        connectedAt: '2025-01-01T00:00:00.000Z',
+        disconnectedAt: '2025-01-01T00:00:10.000Z',
+        messageCount: 2
+      }
+    ])
+
+    const manager = new SessionManager()
+    const sessions = manager.listSessions(10)
+
+    expect(mocks.listSessionSummaries).toHaveBeenCalledWith(10)
+    expect(sessions).toEqual([
+      {
+        sessionId: 'session-1',
+        state: 'ready',
+        transport: 'stdio',
+        connectedAt: '2025-01-01T00:00:00.000Z',
+        messageCount: 4
+      },
+      {
+        sessionId: 'session-2',
+        state: 'error',
+        transport: 'stdio',
+        connectedAt: '2025-01-01T00:00:00.000Z',
+        disconnectedAt: '2025-01-01T00:00:10.000Z',
+        error: 'boom',
+        messageCount: 2
+      }
+    ])
   })
 })

@@ -8,14 +8,29 @@ type MessageRow = {
   created_at: string
 }
 
+type SessionSummaryRow = {
+  id: string
+  transport_type: 'stdio'
+  status: string
+  error_text: string | null
+  connected_at: string
+  disconnected_at: string | null
+  message_count: number
+}
+
 const state = vi.hoisted(() => ({
-  rows: [] as MessageRow[]
+  rows: [] as MessageRow[],
+  sessionRows: [] as SessionSummaryRow[]
 }))
 
 vi.mock('../src/main/persistence/database', () => ({
   getDatabase: () => ({
     prepare: () => ({
-      all: (params: { sessionId: string; limit: number }) => {
+      all: (params: { sessionId?: string; limit: number }) => {
+        if (params.sessionId === undefined) {
+          return state.sessionRows.slice(0, params.limit)
+        }
+
         return state.rows
           .filter((row) => row.session_id === params.sessionId)
           .sort((a, b) => b.id - a.id)
@@ -25,11 +40,12 @@ vi.mock('../src/main/persistence/database', () => ({
   })
 }))
 
-import { listSessionMessages } from '../src/main/persistence/sessionsRepo'
+import { listSessionMessages, listSessionSummaries } from '../src/main/persistence/sessionsRepo'
 
 describe('sessionsRepo listSessionMessages', () => {
   beforeEach(() => {
     state.rows = []
+    state.sessionRows = []
   })
 
   it('returns newest messages first and parses valid JSON payloads', () => {
@@ -86,5 +102,41 @@ describe('sessionsRepo listSessionMessages', () => {
     const allMessages = listSessionMessages('s-2', 100)
     expect(allMessages).toHaveLength(2)
     expect(allMessages[1].payload).toBe('{not-json')
+  })
+
+  it('returns session summaries with bounded limit and mapped fields', () => {
+    state.sessionRows = [
+      {
+        id: 's-1',
+        transport_type: 'stdio',
+        status: 'ready',
+        error_text: null,
+        connected_at: '2025-01-01T00:00:00.000Z',
+        disconnected_at: null,
+        message_count: 3
+      },
+      {
+        id: 's-2',
+        transport_type: 'stdio',
+        status: 'error',
+        error_text: 'boom',
+        connected_at: '2025-01-01T00:00:01.000Z',
+        disconnected_at: '2025-01-01T00:00:02.000Z',
+        message_count: 1
+      }
+    ]
+
+    const summaries = listSessionSummaries(0)
+
+    expect(summaries).toHaveLength(1)
+    expect(summaries[0]).toEqual({
+      sessionId: 's-1',
+      transport: 'stdio',
+      state: 'ready',
+      error: null,
+      connectedAt: '2025-01-01T00:00:00.000Z',
+      disconnectedAt: null,
+      messageCount: 3
+    })
   })
 })
