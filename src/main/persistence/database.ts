@@ -13,6 +13,7 @@ function openDatabase(): Database.Database {
   const instance = new Database(dbPath)
 
   instance.pragma('journal_mode = WAL')
+  instance.pragma('foreign_keys = ON')
   instance.exec(`
     CREATE TABLE IF NOT EXISTS server_profiles (
       id TEXT PRIMARY KEY,
@@ -23,6 +24,31 @@ function openDatabase(): Database.Database {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      transport_type TEXT NOT NULL,
+      command TEXT NOT NULL,
+      args_json TEXT NOT NULL,
+      cwd TEXT NOT NULL,
+      env_json TEXT NOT NULL,
+      status TEXT NOT NULL,
+      error_text TEXT,
+      connected_at TEXT NOT NULL,
+      disconnected_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      direction TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_messages_session_created_at
+      ON messages(session_id, created_at);
   `)
 
   return instance

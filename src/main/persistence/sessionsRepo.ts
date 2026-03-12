@@ -1,0 +1,149 @@
+import { getDatabase } from './database'
+
+type SessionRow = {
+  id: string
+  transport_type: 'stdio'
+  command: string
+  args_json: string
+  cwd: string
+  env_json: string
+  status: string
+  error_text: string | null
+  connected_at: string
+  disconnected_at: string | null
+}
+
+export type SessionRecord = {
+  id: string
+  transportType: 'stdio'
+  command: string
+  args: string[]
+  cwd: string
+  env: Record<string, string>
+  status: string
+  errorText: string | null
+  connectedAt: string
+  disconnectedAt: string | null
+}
+
+function mapSessionRow(row: SessionRow): SessionRecord {
+  return {
+    id: row.id,
+    transportType: row.transport_type,
+    command: row.command,
+    args: JSON.parse(row.args_json) as string[],
+    cwd: row.cwd,
+    env: JSON.parse(row.env_json) as Record<string, string>,
+    status: row.status,
+    errorText: row.error_text,
+    connectedAt: row.connected_at,
+    disconnectedAt: row.disconnected_at
+  }
+}
+
+export function insertSessionRecord(input: {
+  id: string
+  command: string
+  args: string[]
+  cwd: string
+  env: Record<string, string>
+  status: string
+  connectedAt: string
+}): void {
+  const db = getDatabase()
+
+  db.prepare(
+    `
+    INSERT INTO sessions (
+      id,
+      transport_type,
+      command,
+      args_json,
+      cwd,
+      env_json,
+      status,
+      connected_at
+    ) VALUES (
+      @id,
+      @transportType,
+      @command,
+      @argsJson,
+      @cwd,
+      @envJson,
+      @status,
+      @connectedAt
+    )
+    `
+  ).run({
+    id: input.id,
+    transportType: 'stdio',
+    command: input.command,
+    argsJson: JSON.stringify(input.args),
+    cwd: input.cwd,
+    envJson: JSON.stringify(input.env),
+    status: input.status,
+    connectedAt: input.connectedAt
+  })
+}
+
+export function updateSessionRecord(
+  sessionId: string,
+  status: string,
+  options?: { disconnectedAt?: string; errorText?: string | null }
+): void {
+  const db = getDatabase()
+
+  db.prepare(
+    `
+    UPDATE sessions
+    SET
+      status = @status,
+      disconnected_at = COALESCE(@disconnectedAt, disconnected_at),
+      error_text = COALESCE(@errorText, error_text)
+    WHERE id = @sessionId
+    `
+  ).run({
+    sessionId,
+    status,
+    disconnectedAt: options?.disconnectedAt,
+    errorText: options?.errorText
+  })
+}
+
+export function getSessionRecord(sessionId: string): SessionRecord | null {
+  const db = getDatabase()
+
+  const row = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as
+    | SessionRow
+    | undefined
+
+  return row ? mapSessionRow(row) : null
+}
+
+export function insertSessionMessage(input: {
+  sessionId: string
+  direction: 'outbound' | 'inbound'
+  payloadJson: string
+  createdAt: string
+}): void {
+  const db = getDatabase()
+
+  db.prepare(
+    `
+    INSERT INTO messages (session_id, direction, payload_json, created_at)
+    VALUES (@sessionId, @direction, @payloadJson, @createdAt)
+    `
+  ).run(input)
+}
+
+export function countSessionMessages(sessionId: string): number {
+  const db = getDatabase()
+
+  const row = db
+    .prepare('SELECT COUNT(*) AS count FROM messages WHERE session_id = ?')
+    .get(sessionId) as {
+    count: number
+  }
+
+  return row.count
+}
