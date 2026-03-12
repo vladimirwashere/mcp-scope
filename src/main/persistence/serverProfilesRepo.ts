@@ -9,17 +9,34 @@ import { getDatabase } from './database'
 type ServerProfileRow = {
   id: string
   name: string
+  transport_type: 'stdio' | 'sse'
   command: string
   args_json: string
   cwd: string
+  url: string | null
+  headers_json: string | null
   created_at: string
   updated_at: string
 }
 
 function toServerProfile(row: ServerProfileRow): ServerProfile {
+  if (row.transport_type === 'sse') {
+    return {
+      id: row.id,
+      name: row.name,
+      transport: 'sse',
+      url: row.url ?? '',
+      headers:
+        row.headers_json !== null ? (JSON.parse(row.headers_json) as Record<string, string>) : {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }
+  }
+
   return {
     id: row.id,
     name: row.name,
+    transport: 'stdio',
     command: row.command,
     args: JSON.parse(row.args_json) as string[],
     cwd: row.cwd,
@@ -29,12 +46,23 @@ function toServerProfile(row: ServerProfileRow): ServerProfile {
 }
 
 function normalizeInput(input: UpsertServerProfileInput): UpsertServerProfileInput {
-  const normalized: UpsertServerProfileInput = {
-    name: input.name.trim(),
-    command: input.command.trim(),
-    args: input.args.map((arg) => arg.trim()).filter((arg) => arg.length > 0),
-    cwd: input.cwd.trim()
-  }
+  const normalized: UpsertServerProfileInput =
+    input.transport === 'stdio'
+      ? {
+          name: input.name.trim(),
+          transport: 'stdio',
+          command: input.command.trim(),
+          args: input.args.map((arg) => arg.trim()).filter((arg) => arg.length > 0),
+          cwd: input.cwd.trim()
+        }
+      : {
+          name: input.name.trim(),
+          transport: 'sse',
+          url: input.url.trim(),
+          headers: Object.fromEntries(
+            Object.entries(input.headers ?? {}).map(([key, value]) => [key.trim(), value.trim()])
+          )
+        }
 
   if (input.id !== undefined) {
     normalized.id = input.id
@@ -48,12 +76,29 @@ function ensureValidInput(input: UpsertServerProfileInput): void {
     throw new Error('Server profile name is required')
   }
 
-  if (input.command.length === 0) {
-    throw new Error('Server profile command is required')
+  if (input.transport === 'stdio') {
+    if (input.command.length === 0) {
+      throw new Error('Server profile command is required')
+    }
+
+    if (input.cwd.length === 0) {
+      throw new Error('Server profile cwd is required')
+    }
+
+    return
   }
 
-  if (input.cwd.length === 0) {
-    throw new Error('Server profile cwd is required')
+  if (input.url.length === 0) {
+    throw new Error('SSE profile URL is required')
+  }
+
+  try {
+    const parsed = new URL(input.url)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error('SSE profile URL must use http or https')
+    }
+  } catch {
+    throw new Error('SSE profile URL must be valid')
   }
 }
 
@@ -63,6 +108,7 @@ export function listServerProfiles(): ServerProfile[] {
     .prepare(
       `
       SELECT id, name, command, args_json, cwd, created_at, updated_at
+      , transport_type, url, headers_json
       FROM server_profiles
       ORDER BY updated_at DESC
       `
@@ -88,21 +134,49 @@ export function upsertServerProfile(rawInput: UpsertServerProfileInput): ServerP
 
   db.prepare(
     `
-    INSERT INTO server_profiles (id, name, command, args_json, cwd, created_at, updated_at)
-    VALUES (@id, @name, @command, @argsJson, @cwd, @createdAt, @updatedAt)
+    INSERT INTO server_profiles (
+      id,
+      name,
+      transport_type,
+      command,
+      args_json,
+      cwd,
+      url,
+      headers_json,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      @id,
+      @name,
+      @transportType,
+      @command,
+      @argsJson,
+      @cwd,
+      @url,
+      @headersJson,
+      @createdAt,
+      @updatedAt
+    )
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
+      transport_type = excluded.transport_type,
       command = excluded.command,
       args_json = excluded.args_json,
       cwd = excluded.cwd,
+      url = excluded.url,
+      headers_json = excluded.headers_json,
       updated_at = excluded.updated_at
     `
   ).run({
     id,
     name: input.name,
-    command: input.command,
-    argsJson: JSON.stringify(input.args),
-    cwd: input.cwd,
+    transportType: input.transport,
+    command: input.transport === 'stdio' ? input.command : 'sse',
+    argsJson: JSON.stringify(input.transport === 'stdio' ? input.args : []),
+    cwd: input.transport === 'stdio' ? input.cwd : '',
+    url: input.transport === 'sse' ? input.url : null,
+    headersJson: input.transport === 'sse' ? JSON.stringify(input.headers ?? {}) : null,
     createdAt,
     updatedAt: now
   })
@@ -111,6 +185,7 @@ export function upsertServerProfile(rawInput: UpsertServerProfileInput): ServerP
     .prepare(
       `
       SELECT id, name, command, args_json, cwd, created_at, updated_at
+      , transport_type, url, headers_json
       FROM server_profiles
       WHERE id = ?
       `

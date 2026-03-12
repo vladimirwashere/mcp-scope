@@ -25,20 +25,32 @@ export type PingResponse = {
 export type ServerProfile = {
   id: string
   name: string
-  command: string
-  args: string[]
-  cwd: string
+  transport: SessionTransport
+  command?: string
+  args?: string[]
+  cwd?: string
+  url?: string
+  headers?: Record<string, string>
   createdAt: string
   updatedAt: string
 }
 
-export type UpsertServerProfileInput = {
-  id?: string
-  name: string
-  command: string
-  args: string[]
-  cwd: string
-}
+export type UpsertServerProfileInput =
+  | {
+      id?: string
+      name: string
+      transport: 'stdio'
+      command: string
+      args: string[]
+      cwd: string
+    }
+  | {
+      id?: string
+      name: string
+      transport: 'sse'
+      url: string
+      headers?: Record<string, string>
+    }
 
 export type DeleteServerProfileInput = {
   id: string

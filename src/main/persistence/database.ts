@@ -5,6 +5,14 @@ import { join } from 'node:path'
 
 let db: Database.Database | null = null
 
+function addColumnIfMissing(db: Database.Database, table: string, definition: string): void {
+  const columnName = definition.split(' ')[0]
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+  if (!columns.some((column) => column.name === columnName)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`)
+  }
+}
+
 function openDatabase(): Database.Database {
   const userDataDir = app.getPath('userData')
   mkdirSync(userDataDir, { recursive: true })
@@ -18,9 +26,12 @@ function openDatabase(): Database.Database {
     CREATE TABLE IF NOT EXISTS server_profiles (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      transport_type TEXT NOT NULL DEFAULT 'stdio',
       command TEXT NOT NULL,
       args_json TEXT NOT NULL,
       cwd TEXT NOT NULL,
+      url TEXT,
+      headers_json TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -50,6 +61,11 @@ function openDatabase(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_messages_session_created_at
       ON messages(session_id, created_at);
   `)
+
+  // Backfill older databases created before server profile transport expansion.
+  addColumnIfMissing(instance, 'server_profiles', "transport_type TEXT NOT NULL DEFAULT 'stdio'")
+  addColumnIfMissing(instance, 'server_profiles', 'url TEXT')
+  addColumnIfMissing(instance, 'server_profiles', 'headers_json TEXT')
 
   return instance
 }

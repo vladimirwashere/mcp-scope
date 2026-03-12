@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ServerProfile, SessionMessage, SessionStatus, SessionSummary } from '../../shared/ipc'
 
+type ProfileTransport = 'stdio' | 'sse'
+
 function App(): React.JSX.Element {
   const [metaText, setMetaText] = useState('Loading runtime metadata...')
   const [profiles, setProfiles] = useState<ServerProfile[]>([])
   const [name, setName] = useState('')
+  const [profileTransport, setProfileTransport] = useState<ProfileTransport>('stdio')
   const [command, setCommand] = useState('npx')
   const [argsRaw, setArgsRaw] = useState('')
   const [cwd, setCwd] = useState('')
@@ -101,15 +104,25 @@ function App(): React.JSX.Element {
         .map((value) => value.trim())
         .filter((value) => value.length > 0)
 
-      await window.api.upsertServerProfile({
-        name,
-        command,
-        args,
-        cwd
-      })
+      if (profileTransport === 'stdio') {
+        await window.api.upsertServerProfile({
+          name,
+          transport: 'stdio',
+          command,
+          args,
+          cwd
+        })
+      } else {
+        await window.api.upsertServerProfile({
+          name,
+          transport: 'sse',
+          url: sseUrl
+        })
+      }
 
       setName('')
       setArgsRaw('')
+      setSseUrl('')
 
       await refreshProfiles()
     } catch (error) {
@@ -126,14 +139,44 @@ function App(): React.JSX.Element {
     setSessionError(null)
 
     try {
-      const connected = await window.api.connectSession({
-        transport: 'stdio',
-        stdio: {
-          command: profile.command,
-          args: profile.args,
-          cwd: profile.cwd
-        }
-      })
+      const connected =
+        profile.transport === 'stdio'
+          ? await (() => {
+              const stdioInput: {
+                command: string
+                args: string[]
+                cwd?: string
+              } = {
+                command: profile.command ?? '',
+                args: profile.args ?? []
+              }
+
+              if (profile.cwd !== undefined) {
+                stdioInput.cwd = profile.cwd
+              }
+
+              return window.api.connectSession({
+                transport: 'stdio',
+                stdio: stdioInput
+              })
+            })()
+          : await (() => {
+              const sseInput: {
+                url: string
+                headers?: Record<string, string>
+              } = {
+                url: profile.url ?? ''
+              }
+
+              if (profile.headers !== undefined) {
+                sseInput.headers = profile.headers
+              }
+
+              return window.api.connectSession({
+                transport: 'sse',
+                sse: sseInput
+              })
+            })()
 
       const status = await window.api.getSessionStatus({ sessionId: connected.sessionId })
       setSessionStatus(status)
@@ -273,24 +316,43 @@ function App(): React.JSX.Element {
                 placeholder="Profile name"
                 className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
               />
-              <input
-                value={command}
-                onChange={(event) => setCommand(event.target.value)}
-                placeholder="Command"
+              <select
+                value={profileTransport}
+                onChange={(event) => setProfileTransport(event.target.value as ProfileTransport)}
                 className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
-              />
-              <input
-                value={argsRaw}
-                onChange={(event) => setArgsRaw(event.target.value)}
-                placeholder="Args (space separated)"
-                className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
-              />
-              <input
-                value={cwd}
-                onChange={(event) => setCwd(event.target.value)}
-                placeholder="Working directory"
-                className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
-              />
+              >
+                <option value="stdio">Stdio</option>
+                <option value="sse">SSE</option>
+              </select>
+              {profileTransport === 'stdio' ? (
+                <>
+                  <input
+                    value={command}
+                    onChange={(event) => setCommand(event.target.value)}
+                    placeholder="Command"
+                    className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
+                  />
+                  <input
+                    value={argsRaw}
+                    onChange={(event) => setArgsRaw(event.target.value)}
+                    placeholder="Args (space separated)"
+                    className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
+                  />
+                  <input
+                    value={cwd}
+                    onChange={(event) => setCwd(event.target.value)}
+                    placeholder="Working directory"
+                    className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
+                  />
+                </>
+              ) : (
+                <input
+                  value={sseUrl}
+                  onChange={(event) => setSseUrl(event.target.value)}
+                  placeholder="SSE endpoint URL"
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
+                />
+              )}
               <button
                 onClick={handleSaveProfile}
                 className="w-full rounded bg-slate-200 px-2 py-1 text-sm font-medium text-slate-900"
@@ -327,9 +389,13 @@ function App(): React.JSX.Element {
                   >
                     <p className="text-sm font-medium">{profile.name}</p>
                     <p className="mt-1 text-xs text-slate-400">
-                      {profile.command} {profile.args.join(' ')}
+                      {profile.transport === 'stdio'
+                        ? `${profile.command ?? ''} ${(profile.args ?? []).join(' ')}`
+                        : profile.url}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">cwd: {profile.cwd}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {profile.transport === 'stdio' ? `cwd: ${profile.cwd}` : 'transport: sse'}
+                    </p>
                     <button
                       onClick={() => handleDeleteProfile(profile.id)}
                       className="mt-2 rounded border border-slate-700 px-2 py-1 text-xs text-slate-300"
