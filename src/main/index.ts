@@ -3,7 +3,18 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { APP_NAME, APP_VERSION } from '../shared/constants'
-import { IPC_CHANNELS, type AppMeta, type PingResponse } from '../shared/ipc'
+import {
+  IPC_CHANNELS,
+  type AppMeta,
+  type PingResponse,
+  type DeleteServerProfileInput,
+  type UpsertServerProfileInput
+} from '../shared/ipc'
+import {
+  deleteServerProfile,
+  listServerProfiles,
+  upsertServerProfile
+} from './persistence/serverProfilesRepo'
 
 function createWindow(): void {
   // Create the browser window.
@@ -70,6 +81,18 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle(IPC_CHANNELS.serverProfilesList, () => {
+    return listServerProfiles()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.serverProfilesUpsert, (_, input: UpsertServerProfileInput) => {
+    return upsertServerProfile(input)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.serverProfilesDelete, (_, input: DeleteServerProfileInput) => {
+    return deleteServerProfile(input)
+  })
+
   createWindow()
 
   app.on('activate', function () {
@@ -91,6 +114,9 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   ipcMain.removeHandler(IPC_CHANNELS.appGetMeta)
   ipcMain.removeHandler(IPC_CHANNELS.appPing)
+  ipcMain.removeHandler(IPC_CHANNELS.serverProfilesList)
+  ipcMain.removeHandler(IPC_CHANNELS.serverProfilesUpsert)
+  ipcMain.removeHandler(IPC_CHANNELS.serverProfilesDelete)
 })
 
 // In this file you can include the rest of your app's specific main process

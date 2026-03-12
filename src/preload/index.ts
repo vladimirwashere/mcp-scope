@@ -5,7 +5,10 @@ import { IPC_CHANNELS, type AppApi } from '../shared/ipc'
 // Custom APIs for renderer
 const api: AppApi = {
   getAppMeta: () => ipcRenderer.invoke(IPC_CHANNELS.appGetMeta),
-  ping: () => ipcRenderer.invoke(IPC_CHANNELS.appPing)
+  ping: () => ipcRenderer.invoke(IPC_CHANNELS.appPing),
+  listServerProfiles: () => ipcRenderer.invoke(IPC_CHANNELS.serverProfilesList),
+  upsertServerProfile: (input) => ipcRenderer.invoke(IPC_CHANNELS.serverProfilesUpsert, input),
+  deleteServerProfile: (input) => ipcRenderer.invoke(IPC_CHANNELS.serverProfilesDelete, input)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
