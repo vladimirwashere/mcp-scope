@@ -2,7 +2,7 @@ import { getDatabase } from './database'
 
 type SessionRow = {
   id: string
-  transport_type: 'stdio'
+  transport_type: 'stdio' | 'sse'
   command: string
   args_json: string
   cwd: string
@@ -15,7 +15,7 @@ type SessionRow = {
 
 export type SessionRecord = {
   id: string
-  transportType: 'stdio'
+  transportType: 'stdio' | 'sse'
   command: string
   args: string[]
   cwd: string
@@ -28,7 +28,7 @@ export type SessionRecord = {
 
 type SessionSummaryRow = {
   id: string
-  transport_type: 'stdio'
+  transport_type: 'stdio' | 'sse'
   status: string
   error_text: string | null
   connected_at: string
@@ -38,7 +38,7 @@ type SessionSummaryRow = {
 
 export type SessionSummaryRecord = {
   sessionId: string
-  transport: 'stdio'
+  transport: 'stdio' | 'sse'
   state: string
   error: string | null
   connectedAt: string

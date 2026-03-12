@@ -59,10 +59,22 @@ export type StdioConnectInput = {
   env?: Record<string, string>
 }
 
-export type SessionConnectInput = {
-  transport: 'stdio'
-  stdio: StdioConnectInput
+export type SseConnectInput = {
+  url: string
+  headers?: Record<string, string>
 }
+
+export type SessionTransport = 'stdio' | 'sse'
+
+export type SessionConnectInput =
+  | {
+      transport: 'stdio'
+      stdio: StdioConnectInput
+    }
+  | {
+      transport: 'sse'
+      sse: SseConnectInput
+    }
 
 export type SessionConnectResponse = {
   sessionId: string
@@ -76,7 +88,7 @@ export type SessionDisconnectInput = {
 export type SessionStatus = {
   sessionId: string
   state: SessionState
-  transport: 'stdio'
+  transport: SessionTransport
   connectedAt: string
   disconnectedAt?: string
   error?: string
@@ -105,7 +117,7 @@ export type SessionMessagesInput = {
 export type SessionSummary = {
   sessionId: string
   state: SessionState
-  transport: 'stdio'
+  transport: SessionTransport
   connectedAt: string
   disconnectedAt?: string
   error?: string

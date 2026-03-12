@@ -8,6 +8,7 @@ function App(): React.JSX.Element {
   const [command, setCommand] = useState('npx')
   const [argsRaw, setArgsRaw] = useState('')
   const [cwd, setCwd] = useState('')
+  const [sseUrl, setSseUrl] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
   const [sessionStatus, setSessionStatus] = useState<SessionStatus | null>(null)
   const [sessionMessages, setSessionMessages] = useState<SessionMessage[]>([])
@@ -147,6 +148,30 @@ function App(): React.JSX.Element {
     }
   }
 
+  const handleConnectSse = async (): Promise<void> => {
+    setSessionError(null)
+
+    try {
+      const connected = await window.api.connectSession({
+        transport: 'sse',
+        sse: {
+          url: sseUrl
+        }
+      })
+
+      const status = await window.api.getSessionStatus({ sessionId: connected.sessionId })
+      setSessionStatus(status)
+      const messages = await window.api.getSessionMessages({
+        sessionId: connected.sessionId,
+        limit: 100
+      })
+      setSessionMessages(messages)
+      await refreshSessionHistory()
+    } catch (error) {
+      setSessionError(error instanceof Error ? error.message : 'Failed to connect via SSE')
+    }
+  }
+
   const handleDisconnectSession = async (): Promise<void> => {
     if (!sessionStatus) {
       return
@@ -272,6 +297,20 @@ function App(): React.JSX.Element {
               >
                 Save Profile
               </button>
+              <div className="pt-2">
+                <input
+                  value={sseUrl}
+                  onChange={(event) => setSseUrl(event.target.value)}
+                  placeholder="SSE endpoint URL"
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
+                />
+                <button
+                  onClick={handleConnectSse}
+                  className="mt-2 w-full rounded border border-slate-700 px-2 py-1 text-sm text-slate-300"
+                >
+                  Connect SSE URL
+                </button>
+              </div>
               {saveError ? <p className="text-xs text-rose-400">{saveError}</p> : null}
             </div>
 

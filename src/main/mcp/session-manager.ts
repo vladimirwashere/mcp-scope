@@ -9,6 +9,7 @@ import type {
   SessionDisconnectInput,
   SessionState,
   SessionSummary,
+  SessionTransport,
   SessionStatus
 } from '../../shared/ipc'
 import {
@@ -20,14 +21,14 @@ import {
   insertSessionRecord,
   updateSessionRecord
 } from '../persistence/sessionsRepo'
-import { createTracedStdioTransport } from './transports/stdio-transport'
+import { createTracedTransport } from './transports/transport-factory'
 
 type SessionEvent = 'start-connect' | 'connected' | 'start-disconnect' | 'disconnected' | 'fail'
 
 type RuntimeSession = {
   id: string
   state: SessionState
-  transport: 'stdio'
+  transport: SessionTransport
   connectedAt: string
   disconnectedAt?: string
   error?: string
@@ -55,25 +56,36 @@ export class SessionManager {
   private readonly sessions = new Map<string, RuntimeSession>()
 
   async connect(input: SessionConnectInput): Promise<SessionConnectResponse> {
-    if (input.transport !== 'stdio') {
-      throw new AppError('INVALID_INPUT', 'Unsupported transport type')
-    }
-
     const sessionId = randomUUID()
     const connectedAt = new Date().toISOString()
 
+    const persistenceSeed =
+      input.transport === 'stdio'
+        ? {
+            command: input.stdio.command,
+            args: input.stdio.args,
+            cwd: input.stdio.cwd ?? process.cwd(),
+            env: input.stdio.env ?? {}
+          }
+        : {
+            command: 'sse',
+            args: [input.sse.url],
+            cwd: '',
+            env: input.sse.headers ?? {}
+          }
+
     insertSessionRecord({
       id: sessionId,
-      command: input.stdio.command,
-      args: input.stdio.args,
-      cwd: input.stdio.cwd ?? process.cwd(),
-      env: input.stdio.env ?? {},
+      command: persistenceSeed.command,
+      args: persistenceSeed.args,
+      cwd: persistenceSeed.cwd,
+      env: persistenceSeed.env,
       status: transitionSessionState('disconnected', 'start-connect'),
       connectedAt
     })
 
     try {
-      const transport = createTracedStdioTransport(input.stdio, (direction, message) => {
+      const transport = createTracedTransport(input, (direction, message) => {
         this.captureMessage(sessionId, direction, message)
       })
 
@@ -85,7 +97,7 @@ export class SessionManager {
       const runtime: RuntimeSession = {
         id: sessionId,
         state: transitionSessionState('disconnected', 'start-connect'),
-        transport: 'stdio',
+        transport: input.transport,
         connectedAt,
         client
       }
