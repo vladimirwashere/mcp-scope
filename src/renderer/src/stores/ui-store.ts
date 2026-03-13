@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
 
 type UIStoreState = {
   metaText: string
@@ -8,27 +9,54 @@ type UIStoreState = {
   hydrateMeta: () => Promise<void>
 }
 
-export const useUIStore = create<UIStoreState>((set) => ({
-  metaText: 'Loading runtime metadata...',
-  inspectorHeight: 220,
+const clampInspectorHeight = (value: number): number => {
+  return Math.max(160, Math.min(520, Math.round(value)))
+}
 
-  setMetaText: (value) => {
-    set({ metaText: value })
-  },
+export const useUIStore = create<UIStoreState>()(
+  persist(
+    (set) => ({
+      metaText: 'Loading runtime metadata...',
+      inspectorHeight: 220,
 
-  setInspectorHeight: (value) => {
-    const clamped = Math.max(160, Math.min(520, Math.round(value)))
-    set({ inspectorHeight: clamped })
-  },
+      setMetaText: (value) => {
+        set({ metaText: value })
+      },
 
-  hydrateMeta: async () => {
-    try {
-      const [meta, ping] = await Promise.all([window.api.getAppMeta(), window.api.ping()])
-      set({
-        metaText: `${meta.name} v${meta.version} on ${meta.platform} (ipc ok: ${ping.ok ? 'yes' : 'no'})`
-      })
-    } catch {
-      set({ metaText: 'IPC unavailable' })
+      setInspectorHeight: (value) => {
+        set({ inspectorHeight: clampInspectorHeight(value) })
+      },
+
+      hydrateMeta: async () => {
+        try {
+          const [meta, ping] = await Promise.all([window.api.getAppMeta(), window.api.ping()])
+          set({
+            metaText: `${meta.name} v${meta.version} on ${meta.platform} (ipc ok: ${ping.ok ? 'yes' : 'no'})`
+          })
+        } catch {
+          set({ metaText: 'IPC unavailable' })
+        }
+      }
+    }),
+    {
+      name: 'mcp-scope-ui-preferences',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        inspectorHeight: state.inspectorHeight
+      }),
+      merge: (persistedState, currentState) => {
+        const maybeState = persistedState as Partial<UIStoreState>
+        const inspectorHeight =
+          typeof maybeState.inspectorHeight === 'number'
+            ? clampInspectorHeight(maybeState.inspectorHeight)
+            : currentState.inspectorHeight
+
+        return {
+          ...currentState,
+          ...maybeState,
+          inspectorHeight
+        }
+      }
     }
-  }
-}))
+  )
+)
