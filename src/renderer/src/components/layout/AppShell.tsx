@@ -4,6 +4,7 @@ type AppShellProps = {
   sidebar: ReactNode
   main: ReactNode
   inspector: ReactNode
+  statusBar: ReactNode
   inspectorHeight: number
   onInspectorHeightChange: (height: number) => void
 }
@@ -12,6 +13,7 @@ function AppShell({
   sidebar,
   main,
   inspector,
+  statusBar,
   inspectorHeight,
   onInspectorHeightChange
 }: AppShellProps): React.JSX.Element {
@@ -47,7 +49,7 @@ function AppShell({
       <div
         className="grid h-full"
         style={{
-          gridTemplateRows: `minmax(0, 1fr) 8px ${inspectorHeight}px`
+          gridTemplateRows: `minmax(0, 1fr) 8px ${inspectorHeight}px auto`
         }}
       >
         <div className="grid min-h-0 grid-cols-[300px_1fr]">
@@ -67,6 +69,7 @@ function AppShell({
           }}
         />
         <section className="border-t border-slate-800 bg-slate-950/80 p-4">{inspector}</section>
+        <footer>{statusBar}</footer>
       </div>
     </div>
   )

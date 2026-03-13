@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import ProtocolInspector from './components/inspector/ProtocolInspector'
 import AppShell from './components/layout/AppShell'
+import StatusBar from './components/layout/StatusBar'
 import ServerSidebar from './components/sidebar/ServerSidebar'
 import WorkspacePanel from './components/workspace/WorkspacePanel'
 import { useServerStore } from './stores/server-store'
@@ -153,6 +154,13 @@ function App(): React.JSX.Element {
           onInspectSession={(sessionId) => {
             void inspectSession(sessionId)
           }}
+        />
+      }
+      statusBar={
+        <StatusBar
+          sessionStatus={sessionStatus}
+          sessionError={sessionError}
+          profileCount={profiles.length}
         />
       }
     />
