@@ -64,12 +64,21 @@ function ServerSidebar({
             />
           </>
         ) : (
-          <input
-            value={form.sseUrl}
-            onChange={(event) => setFormField('sseUrl', event.target.value)}
-            placeholder="SSE endpoint URL"
-            className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
-          />
+          <>
+            <input
+              value={form.sseUrl}
+              onChange={(event) => setFormField('sseUrl', event.target.value)}
+              placeholder="SSE endpoint URL"
+              className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
+            />
+            <textarea
+              value={form.sseHeadersRaw}
+              onChange={(event) => setFormField('sseHeadersRaw', event.target.value)}
+              placeholder={'SSE headers (optional)\nAuthorization: Bearer token\nX-Trace-Id: 123'}
+              rows={3}
+              className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
+            />
+          </>
         )}
         <button
           onClick={onSaveProfile}
@@ -109,7 +118,9 @@ function ServerSidebar({
                   : profile.url}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                {profile.transport === 'stdio' ? `cwd: ${profile.cwd}` : 'transport: sse'}
+                {profile.transport === 'stdio'
+                  ? `cwd: ${profile.cwd}`
+                  : `transport: sse | headers: ${Object.keys(profile.headers ?? {}).length}`}
               </p>
               <button
                 onClick={() => onDeleteProfile(profile.id)}

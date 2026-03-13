@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type { ServerProfile, UpsertServerProfileInput } from '../../../shared/ipc'
 
+import { parseSseHeadersRaw } from './server-store-utils'
+
 export type ProfileTransport = 'stdio' | 'sse'
 
 export type ServerFormState = {
@@ -10,6 +12,7 @@ export type ServerFormState = {
   argsRaw: string
   cwd: string
   sseUrl: string
+  sseHeadersRaw: string
 }
 
 type ServerStoreState = {
@@ -29,7 +32,8 @@ const defaultFormState = (): ServerFormState => ({
   command: 'npx',
   argsRaw: '',
   cwd: '',
-  sseUrl: ''
+  sseUrl: '',
+  sseHeadersRaw: ''
 })
 
 export const useServerStore = create<ServerStoreState>((set, get) => ({
@@ -79,7 +83,8 @@ export const useServerStore = create<ServerStoreState>((set, get) => ({
           : {
               name: form.name,
               transport: 'sse',
-              url: form.sseUrl
+              url: form.sseUrl,
+              headers: parseSseHeadersRaw(form.sseHeadersRaw)
             }
 
       await window.api.upsertServerProfile(payload)
