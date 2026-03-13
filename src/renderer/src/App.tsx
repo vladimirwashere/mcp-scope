@@ -10,6 +10,8 @@ import { useUIStore } from './stores/ui-store'
 function App(): React.JSX.Element {
   const metaText = useUIStore((state) => state.metaText)
   const hydrateMeta = useUIStore((state) => state.hydrateMeta)
+  const inspectorHeight = useUIStore((state) => state.inspectorHeight)
+  const setInspectorHeight = useUIStore((state) => state.setInspectorHeight)
 
   const profiles = useServerStore((state) => state.profiles)
   const form = useServerStore((state) => state.form)
@@ -82,6 +84,8 @@ function App(): React.JSX.Element {
 
   return (
     <AppShell
+      inspectorHeight={inspectorHeight}
+      onInspectorHeightChange={setInspectorHeight}
       sidebar={
         <ServerSidebar
           form={form}
