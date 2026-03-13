@@ -17,6 +17,7 @@ function App(): React.JSX.Element {
   const form = useServerStore((state) => state.form)
   const saveError = useServerStore((state) => state.saveError)
   const setFormField = useServerStore((state) => state.setFormField)
+  const resetForm = useServerStore((state) => state.resetForm)
   const refreshProfiles = useServerStore((state) => state.refreshProfiles)
   const saveProfile = useServerStore((state) => state.saveProfile)
   const deleteProfile = useServerStore((state) => state.deleteProfile)
@@ -81,6 +82,33 @@ function App(): React.JSX.Element {
       window.clearInterval(timer)
     }
   }, [refreshActiveSessionMessages, sessionStatus, setSessionError])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      const isShortcut = event.metaKey && !event.ctrlKey && !event.altKey
+      if (!isShortcut) {
+        return
+      }
+
+      if (event.key.toLowerCase() === 'n') {
+        event.preventDefault()
+        resetForm()
+        setSessionError(null)
+        return
+      }
+
+      if (event.key === ',') {
+        event.preventDefault()
+        setSessionError('Settings panel is coming in a later milestone')
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [resetForm, setSessionError])
 
   return (
     <AppShell
