@@ -30,6 +30,3 @@ Items logged here are NOT bugs. They are improvement opportunities deferred unti
 | P1 | M3 | Replace addColumnIfMissing with versioned migration runner | M | M |
 | P5 | M6 | AppShell drag handle: add keyboard resize fallback | S | S |
 | P6 | M8 | Remove 1s polling loop after push stream verified | S | S |
-| P11 | M10 | Implement app menu with Electron Menu API (File, Edit, View, Help) | M | M |
-| P12 | M10 | Add React error boundaries around major UI sections (AppShell, DiscoveryPanel, ProtocolInspector) | M | M |
-| P13 | M10 | Add toast/notification system for user feedback (success, error, info) | M | M |

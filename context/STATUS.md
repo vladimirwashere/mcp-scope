@@ -15,17 +15,15 @@
 | M7 | Discovery IPC handlers, tabbed discovery panel, SchemaForm, invocation flow, result renderer |
 | M8 | Protocol Inspector push stream validated with live MCP server; idle discovery loop fixed |
 | M9 | Session history grouped by profile, persisted history inspection, invocation latency capture, session stats surfaced in UI |
+| M10 | Error UX pass: toasts, panel error boundaries, app menu, architecture/development docs, and known limitations recorded |
 
 ## In Progress
 
-**M10 — Error UX, Polish & Architecture Review**
+**Phase 1 complete.**
 
-- [ ] Error-path UX audit across main/preload/renderer boundaries
-- [ ] Toast/notification system for transient user-facing failures
-- [ ] React error boundaries around major UI sections
-- [ ] App menu and final docs pass (`docs/architecture.md`, `docs/development.md`)
+- [ ] Start Phase 2 planning when requested.
 
-**Status:** M9 is complete and validated with tests. M10 has not started.
+**Status:** M1-M10 are complete and validated.
 
 ## Completed This Session
 
@@ -38,8 +36,13 @@
 - Added latency badges in result rendering and protocol message details.
 - Updated tests for repository/session/discovery changes; verified `pnpm test --run` passes.
 - Updated `.github/copilot-instructions.md` to require `pnpm lint`, `pnpm typecheck`, `pnpm test --run`, and additional impacted checks (such as `pnpm build`) after every change/patch.
+- Added app-wide toast notification infrastructure and surfaced transient discovery/session/profile errors as toasts.
+- Added panel-level React error boundaries for sidebar, workspace/discovery, inspector, and status bar to isolate renderer failures.
+- Added Electron application menu (File/Edit/View/Window/Help) with standard roles and safe external help links.
+- Added `docs/architecture.md` and `docs/development.md`, including known limitations and Phase 2 recommendations.
+- Ran full validation suite successfully: `pnpm lint`, `pnpm typecheck`, `pnpm test --run`, `pnpm build`.
 
 ## Known Issues / Gaps
 
 - Manual windowing is used instead of `@tanstack/react-virtual` (intentional for M8).
-- Polling fallback for message refresh still exists alongside push stream; remove during M10 cleanup.
+- Polling fallback for message refresh still exists alongside push stream; defer removal to next optimization pass.

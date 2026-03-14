@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, Menu, type MenuItemConstructorOptions } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -25,6 +25,106 @@ import {
 } from './persistence/serverProfilesRepo'
 import { sessionManager } from './mcp/session-manager'
 import type { SessionConnectInput, SessionDisconnectInput, SessionStatusInput } from '../shared/ipc'
+
+function buildAppMenu(): Menu {
+  const isMac = process.platform === 'darwin'
+  const template: MenuItemConstructorOptions[] = []
+
+  if (isMac) {
+    template.push({
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    })
+  }
+
+  const fileSubmenu: MenuItemConstructorOptions[] = [isMac ? { role: 'close' } : { role: 'quit' }]
+
+  const editSubmenu: MenuItemConstructorOptions[] = [
+    { role: 'undo' },
+    { role: 'redo' },
+    { type: 'separator' },
+    { role: 'cut' },
+    { role: 'copy' },
+    { role: 'paste' }
+  ]
+
+  if (isMac) {
+    editSubmenu.push(
+      { role: 'pasteAndMatchStyle' },
+      { role: 'delete' },
+      { role: 'selectAll' },
+      { type: 'separator' },
+      {
+        label: 'Speech',
+        submenu: [{ role: 'startSpeaking' }, { role: 'stopSpeaking' }]
+      }
+    )
+  } else {
+    editSubmenu.push({ role: 'delete' }, { type: 'separator' }, { role: 'selectAll' })
+  }
+
+  const windowSubmenu: MenuItemConstructorOptions[] = isMac
+    ? [{ role: 'front' }, { role: 'close' }]
+    : [{ role: 'minimize' }, { role: 'close' }]
+
+  template.push(
+    {
+      label: 'File',
+      submenu: fileSubmenu
+    },
+    {
+      label: 'Edit',
+      submenu: editSubmenu
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    {
+      role: 'window',
+      submenu: windowSubmenu
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'Project Repository',
+          click: () => {
+            void shell.openExternal('https://github.com/modelcontextprotocol')
+          }
+        },
+        {
+          label: 'Electron Documentation',
+          click: () => {
+            void shell.openExternal('https://www.electronjs.org/docs/latest')
+          }
+        }
+      ]
+    }
+  )
+
+  return Menu.buildFromTemplate(template)
+}
 
 function createWindow(): void {
   // Create the browser window.
@@ -66,6 +166,8 @@ function createWindow(): void {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(buildAppMenu())
+
   const messageStreamSubscribers = new Set<number>()
   const pendingMessageBatch: SessionMessage[] = []
   let flushTimer: NodeJS.Timeout | null = null

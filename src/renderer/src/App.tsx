@@ -2,13 +2,16 @@ import DiscoveryPanel from './components/discovery/DiscoveryPanel'
 import { useEffect, useRef } from 'react'
 import ProtocolInspector from './components/inspector/ProtocolInspector'
 import AppShell from './components/layout/AppShell'
+import SectionErrorBoundary from './components/layout/SectionErrorBoundary'
 import StatusBar from './components/layout/StatusBar'
+import ToastViewport from './components/notifications/ToastViewport'
 import ServerSidebar from './components/sidebar/ServerSidebar'
 import WorkspacePanel from './components/workspace/WorkspacePanel'
 import { useDiscoveryStore } from './stores/discovery-store'
 import { useMessageStore } from './stores/message-store'
 import { useServerStore } from './stores/server-store'
 import { useSessionStore } from './stores/session-store'
+import { useToastStore } from './stores/toast-store'
 import { useUIStore } from './stores/ui-store'
 
 function App(): React.JSX.Element {
@@ -66,10 +69,14 @@ function App(): React.JSX.Element {
   const setInspectorDirectionFilter = useMessageStore((state) => state.setDirectionFilter)
   const setInspectorMethodFilter = useMessageStore((state) => state.setMethodFilter)
   const setInspectorSearchFilter = useMessageStore((state) => state.setSearchFilter)
+  const showToast = useToastStore((state) => state.showToast)
 
   const sessionId = sessionStatus?.sessionId ?? null
   const sessionState = sessionStatus?.state ?? null
   const lastDiscoverySessionKeyRef = useRef<string>('')
+  const lastSaveErrorRef = useRef<string | null>(null)
+  const lastSessionErrorRef = useRef<string | null>(null)
+  const lastDiscoveryErrorRef = useRef<string | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -154,103 +161,153 @@ function App(): React.JSX.Element {
     }
   }, [resetForm, setSessionError])
 
+  useEffect(() => {
+    if (!saveError || lastSaveErrorRef.current === saveError) {
+      return
+    }
+
+    lastSaveErrorRef.current = saveError
+    showToast({
+      title: 'Profile Save Failed',
+      message: saveError,
+      kind: 'error'
+    })
+  }, [saveError, showToast])
+
+  useEffect(() => {
+    if (!sessionError || lastSessionErrorRef.current === sessionError) {
+      return
+    }
+
+    lastSessionErrorRef.current = sessionError
+    showToast({
+      title: 'Session Error',
+      message: sessionError,
+      kind: 'error'
+    })
+  }, [sessionError, showToast])
+
+  useEffect(() => {
+    if (!discoveryError || lastDiscoveryErrorRef.current === discoveryError) {
+      return
+    }
+
+    lastDiscoveryErrorRef.current = discoveryError
+    showToast({
+      title: 'Discovery Error',
+      message: discoveryError,
+      kind: 'error'
+    })
+  }, [discoveryError, showToast])
+
   return (
-    <AppShell
-      inspectorHeight={inspectorHeight}
-      onInspectorHeightChange={setInspectorHeight}
-      sidebar={
-        <ServerSidebar
-          form={form}
-          profiles={profiles}
-          saveError={saveError}
-          setFormField={setFormField}
-          onSaveProfile={() => {
-            void saveProfile()
-          }}
-          onConnectSseUrl={(url) => {
-            void connectSseUrl(url)
-          }}
-          onDeleteProfile={(id) => {
-            void deleteProfile(id)
-          }}
-          onConnectProfile={(profile) => {
-            void connectProfile(profile)
-          }}
-        />
-      }
-      main={
-        <>
-          <WorkspacePanel
-            metaText={metaText}
-            profileCount={profiles.length}
-            sessionStatus={sessionStatus}
-            sessionError={sessionError}
-          />
-          <DiscoveryPanel
-            sessionStatus={sessionStatus}
-            activeTab={discoveryTab}
-            tools={discoveryTools}
-            resources={discoveryResources}
-            prompts={discoveryPrompts}
-            loading={discoveryLoading}
-            error={discoveryError}
-            activeResult={discoveryResult}
-            activeResultTitle={discoveryResultTitle}
-            activeResultLatencyMs={discoveryResultLatencyMs}
-            onChangeTab={setDiscoveryTab}
-            onReload={() => {
-              void hydrateDiscovery(sessionStatus)
-            }}
-            onInvokeTool={(name, args) => {
-              void invokeTool(sessionStatus, name, args)
-            }}
-            onReadResource={(uri) => {
-              void loadResource(sessionStatus, uri)
-            }}
-            onGetPrompt={(name, args) => {
-              void loadPrompt(sessionStatus, name, args)
-            }}
-            onClearResult={clearDiscoveryResult}
-          />
-        </>
-      }
-      inspector={
-        <ProtocolInspector
-          sessionStatus={sessionStatus}
-          sessionMessages={inspectorMessages}
-          sessionHistory={sessionHistory}
-          sessionError={sessionError}
-          paused={inspectorPaused}
-          directionFilter={inspectorFilters.direction}
-          methodFilter={inspectorFilters.method}
-          searchFilter={inspectorFilters.search}
-          onRefreshSessions={() => {
-            void refreshSessionHistory()
-          }}
-          onRefreshMessages={() => {
-            void refreshActiveSessionMessages()
-          }}
-          onDisconnect={() => {
-            void disconnectActiveSession()
-          }}
-          onInspectSession={(sessionId) => {
-            void inspectSession(sessionId)
-          }}
-          onTogglePaused={toggleInspectorPaused}
-          onClearMessages={clearInspectorMessages}
-          onDirectionFilterChange={setInspectorDirectionFilter}
-          onMethodFilterChange={setInspectorMethodFilter}
-          onSearchFilterChange={setInspectorSearchFilter}
-        />
-      }
-      statusBar={
-        <StatusBar
-          sessionStatus={sessionStatus}
-          sessionError={sessionError}
-          profileCount={profiles.length}
-        />
-      }
-    />
+    <>
+      <AppShell
+        inspectorHeight={inspectorHeight}
+        onInspectorHeightChange={setInspectorHeight}
+        sidebar={
+          <SectionErrorBoundary sectionName="Sidebar">
+            <ServerSidebar
+              form={form}
+              profiles={profiles}
+              saveError={saveError}
+              setFormField={setFormField}
+              onSaveProfile={() => {
+                void saveProfile()
+              }}
+              onConnectSseUrl={(url) => {
+                void connectSseUrl(url)
+              }}
+              onDeleteProfile={(id) => {
+                void deleteProfile(id)
+              }}
+              onConnectProfile={(profile) => {
+                void connectProfile(profile)
+              }}
+            />
+          </SectionErrorBoundary>
+        }
+        main={
+          <SectionErrorBoundary sectionName="Workspace and Discovery">
+            <>
+              <WorkspacePanel
+                metaText={metaText}
+                profileCount={profiles.length}
+                sessionStatus={sessionStatus}
+                sessionError={sessionError}
+              />
+              <DiscoveryPanel
+                sessionStatus={sessionStatus}
+                activeTab={discoveryTab}
+                tools={discoveryTools}
+                resources={discoveryResources}
+                prompts={discoveryPrompts}
+                loading={discoveryLoading}
+                error={discoveryError}
+                activeResult={discoveryResult}
+                activeResultTitle={discoveryResultTitle}
+                activeResultLatencyMs={discoveryResultLatencyMs}
+                onChangeTab={setDiscoveryTab}
+                onReload={() => {
+                  void hydrateDiscovery(sessionStatus)
+                }}
+                onInvokeTool={(name, args) => {
+                  void invokeTool(sessionStatus, name, args)
+                }}
+                onReadResource={(uri) => {
+                  void loadResource(sessionStatus, uri)
+                }}
+                onGetPrompt={(name, args) => {
+                  void loadPrompt(sessionStatus, name, args)
+                }}
+                onClearResult={clearDiscoveryResult}
+              />
+            </>
+          </SectionErrorBoundary>
+        }
+        inspector={
+          <SectionErrorBoundary sectionName="Protocol Inspector">
+            <ProtocolInspector
+              sessionStatus={sessionStatus}
+              sessionMessages={inspectorMessages}
+              sessionHistory={sessionHistory}
+              sessionError={sessionError}
+              paused={inspectorPaused}
+              directionFilter={inspectorFilters.direction}
+              methodFilter={inspectorFilters.method}
+              searchFilter={inspectorFilters.search}
+              onRefreshSessions={() => {
+                void refreshSessionHistory()
+              }}
+              onRefreshMessages={() => {
+                void refreshActiveSessionMessages()
+              }}
+              onDisconnect={() => {
+                void disconnectActiveSession()
+              }}
+              onInspectSession={(sessionId) => {
+                void inspectSession(sessionId)
+              }}
+              onTogglePaused={toggleInspectorPaused}
+              onClearMessages={clearInspectorMessages}
+              onDirectionFilterChange={setInspectorDirectionFilter}
+              onMethodFilterChange={setInspectorMethodFilter}
+              onSearchFilterChange={setInspectorSearchFilter}
+            />
+          </SectionErrorBoundary>
+        }
+        statusBar={
+          <SectionErrorBoundary sectionName="Status Bar">
+            <StatusBar
+              sessionStatus={sessionStatus}
+              sessionError={sessionError}
+              profileCount={profiles.length}
+            />
+          </SectionErrorBoundary>
+        }
+      />
+      <ToastViewport />
+    </>
   )
 }
 
