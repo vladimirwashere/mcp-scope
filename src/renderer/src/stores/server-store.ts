@@ -79,7 +79,7 @@ export const useServerStore = create<ServerStoreState>((set, get) => ({
               transport: 'stdio',
               command: form.command,
               args,
-              ...(cwd.length > 0 ? { cwd } : {})
+              cwd
             }
           : {
               name: form.name,

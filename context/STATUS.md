@@ -14,42 +14,32 @@
 | M6 | Dark-mode shell, resizable layout, component split, Zustand stores, status bar, shortcuts |
 | M7 | Discovery IPC handlers, tabbed discovery panel, SchemaForm, invocation flow, result renderer |
 | M8 | Protocol Inspector push stream validated with live MCP server; idle discovery loop fixed |
+| M9 | Session history grouped by profile, persisted history inspection, invocation latency capture, session stats surfaced in UI |
 
 ## In Progress
 
-**M9 — Session History & Timings**
+**M10 — Error UX, Polish & Architecture Review**
 
-- [ ] Session history UI grouped by server profile
-- [ ] Historical message loading path from SQLite
-- [ ] Latency measurement on tool invocations
-- [ ] Session-level stats (message count, avg latency, error count)
+- [ ] Error-path UX audit across main/preload/renderer boundaries
+- [ ] Toast/notification system for transient user-facing failures
+- [ ] React error boundaries around major UI sections
+- [ ] App menu and final docs pass (`docs/architecture.md`, `docs/development.md`)
 
-**Status:** M8 is complete and validated. M9 implementation has not started yet.
+**Status:** M9 is complete and validated with tests. M10 has not started.
 
 ## Completed This Session
 
-- Trimmed context docs (PLAN/STATUS/DECISIONS) to remove redundant detail and keep a lean, accurate project snapshot.
-- Fixed preload bridge exposure sequencing; removed runtime preload dependency issue.
-- Stabilized native SQLite rebuild path for Electron ABI compatibility.
-- Fixed stdio env inheritance/path resolution and optional cwd handling.
-- Stopped idle discovery rehydrate loop caused by unstable effect dependency.
-- Resolved transitive security advisory by pinning `yauzl` to `3.2.1` and validating with typecheck/tests/audit.
-
-## Current Task
-
-- Begin M9 implementation from clean baseline (history UI + DB-backed history load path).
-
-## What's Next
-
-1. Implement session history list grouped by server profile.
-2. Add historical session/message retrieval and selection flow.
-3. Add invocation latency capture and aggregate session stats.
+- Extended session/message IPC contracts for M9 stats fields (`errorCount`, `avgLatencyMs`, `durationMs`) and optional profile linkage.
+- Added SQLite schema backfills for `sessions.server_profile_id`, `messages.latency_ms`, and `messages.is_error`.
+- Updated session persistence queries to expose grouped profile metadata and per-session aggregates.
+- Implemented latency timing in session manager and discovery operations; response messages now carry latency/error metadata when applicable.
+- Wired profile-aware session connection input from renderer (`profileId`) to persistence.
+- Added grouped session history UI in inspector with per-session stats (messages, errors, avg latency, duration).
+- Added latency badges in result rendering and protocol message details.
+- Updated tests for repository/session/discovery changes; verified `pnpm test --run` passes.
+- Updated `.github/copilot-instructions.md` to require `pnpm lint`, `pnpm typecheck`, `pnpm test --run`, and additional impacted checks (such as `pnpm build`) after every change/patch.
 
 ## Known Issues / Gaps
 
 - Manual windowing is used instead of `@tanstack/react-virtual` (intentional for M8).
-- Polling fallback for message refresh still exists alongside push stream; remove during M9/M10 cleanup.
-
-## Suggested Commit
-
-`git add context/PLAN.md context/STATUS.md context/DECISIONS.md && git commit -m "chore(context): trim and normalize project context docs" -m "Remove redundant detail, align milestone status, and keep concise planning/decision context for upcoming M9 work."`
+- Polling fallback for message refresh still exists alongside push stream; remove during M10 cleanup.

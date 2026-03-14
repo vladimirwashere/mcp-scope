@@ -3,6 +3,7 @@ import { getDatabase } from './database'
 type SessionRow = {
   id: string
   transport_type: 'stdio' | 'sse'
+  server_profile_id: string | null
   command: string
   args_json: string
   cwd: string
@@ -16,6 +17,7 @@ type SessionRow = {
 export type SessionRecord = {
   id: string
   transportType: 'stdio' | 'sse'
+  serverProfileId: string | null
   command: string
   args: string[]
   cwd: string
@@ -29,21 +31,35 @@ export type SessionRecord = {
 type SessionSummaryRow = {
   id: string
   transport_type: 'stdio' | 'sse'
+  server_profile_id: string | null
+  server_profile_name: string | null
   status: string
   error_text: string | null
   connected_at: string
   disconnected_at: string | null
   message_count: number
+  avg_latency_ms: number | null
+  error_count: number
 }
 
 export type SessionSummaryRecord = {
   sessionId: string
   transport: 'stdio' | 'sse'
+  serverProfileId: string | null
+  serverProfileName: string | null
   state: string
   error: string | null
   connectedAt: string
   disconnectedAt: string | null
   messageCount: number
+  avgLatencyMs: number | null
+  errorCount: number
+}
+
+export type SessionStatsRecord = {
+  messageCount: number
+  avgLatencyMs: number | null
+  errorCount: number
 }
 
 type MessageRow = {
@@ -51,6 +67,8 @@ type MessageRow = {
   session_id: string
   direction: 'outbound' | 'inbound'
   payload_json: string
+  latency_ms: number | null
+  is_error: number
   created_at: string
 }
 
@@ -60,12 +78,15 @@ export type SessionMessageRecord = {
   direction: 'outbound' | 'inbound'
   payload: unknown
   createdAt: string
+  latencyMs?: number
+  isError?: boolean
 }
 
 function mapSessionRow(row: SessionRow): SessionRecord {
   return {
     id: row.id,
     transportType: row.transport_type,
+    serverProfileId: row.server_profile_id,
     command: row.command,
     args: JSON.parse(row.args_json) as string[],
     cwd: row.cwd,
@@ -79,6 +100,8 @@ function mapSessionRow(row: SessionRow): SessionRecord {
 
 export function insertSessionRecord(input: {
   id: string
+  transportType: 'stdio' | 'sse'
+  serverProfileId?: string
   command: string
   args: string[]
   cwd: string
@@ -93,6 +116,7 @@ export function insertSessionRecord(input: {
     INSERT INTO sessions (
       id,
       transport_type,
+      server_profile_id,
       command,
       args_json,
       cwd,
@@ -102,6 +126,7 @@ export function insertSessionRecord(input: {
     ) VALUES (
       @id,
       @transportType,
+      @serverProfileId,
       @command,
       @argsJson,
       @cwd,
@@ -112,7 +137,8 @@ export function insertSessionRecord(input: {
     `
   ).run({
     id: input.id,
-    transportType: 'stdio',
+    transportType: input.transportType,
+    serverProfileId: input.serverProfileId ?? null,
     command: input.command,
     argsJson: JSON.stringify(input.args),
     cwd: input.cwd,
@@ -160,18 +186,27 @@ export function insertSessionMessage(input: {
   sessionId: string
   direction: 'outbound' | 'inbound'
   payloadJson: string
+  latencyMs?: number
+  isError?: boolean
   createdAt: string
 }): number {
   const db = getDatabase()
 
   const result = db
     .prepare(
-    `
-    INSERT INTO messages (session_id, direction, payload_json, created_at)
-    VALUES (@sessionId, @direction, @payloadJson, @createdAt)
+      `
+    INSERT INTO messages (session_id, direction, payload_json, latency_ms, is_error, created_at)
+    VALUES (@sessionId, @direction, @payloadJson, @latencyMs, @isError, @createdAt)
     `
     )
-    .run(input)
+    .run({
+      sessionId: input.sessionId,
+      direction: input.direction,
+      payloadJson: input.payloadJson,
+      latencyMs: input.latencyMs ?? null,
+      isError: input.isError ? 1 : 0,
+      createdAt: input.createdAt
+    })
 
   return Number(result.lastInsertRowid)
 }
@@ -188,6 +223,33 @@ export function countSessionMessages(sessionId: string): number {
   return row.count
 }
 
+export function getSessionStats(sessionId: string): SessionStatsRecord {
+  const db = getDatabase()
+
+  const row = db
+    .prepare(
+      `
+      SELECT
+        COUNT(*) AS message_count,
+        AVG(latency_ms) AS avg_latency_ms,
+        SUM(CASE WHEN is_error = 1 THEN 1 ELSE 0 END) AS error_count
+      FROM messages
+      WHERE session_id = @sessionId
+      `
+    )
+    .get({ sessionId }) as {
+    message_count: number
+    avg_latency_ms: number | null
+    error_count: number
+  }
+
+  return {
+    messageCount: row.message_count,
+    avgLatencyMs: row.avg_latency_ms,
+    errorCount: row.error_count
+  }
+}
+
 function parsePayload(payloadJson: string): unknown {
   try {
     return JSON.parse(payloadJson)
@@ -202,7 +264,7 @@ export function listSessionMessages(sessionId: string, limit = 100): SessionMess
   const rows = db
     .prepare(
       `
-      SELECT id, session_id, direction, payload_json, created_at
+      SELECT id, session_id, direction, payload_json, latency_ms, is_error, created_at
       FROM messages
       WHERE session_id = @sessionId
       ORDER BY id DESC
@@ -219,7 +281,9 @@ export function listSessionMessages(sessionId: string, limit = 100): SessionMess
     sessionId: row.session_id,
     direction: row.direction,
     payload: parsePayload(row.payload_json),
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    ...(row.latency_ms !== null ? { latencyMs: row.latency_ms } : {}),
+    ...(row.is_error === 1 ? { isError: true } : {})
   }))
 }
 
@@ -232,13 +296,18 @@ export function listSessionSummaries(limit = 25): SessionSummaryRecord[] {
       SELECT
         s.id,
         s.transport_type,
+        s.server_profile_id,
+        sp.name AS server_profile_name,
         s.status,
         s.error_text,
         s.connected_at,
         s.disconnected_at,
-        COUNT(m.id) AS message_count
+        COUNT(m.id) AS message_count,
+        AVG(m.latency_ms) AS avg_latency_ms,
+        SUM(CASE WHEN m.is_error = 1 THEN 1 ELSE 0 END) AS error_count
       FROM sessions s
       LEFT JOIN messages m ON m.session_id = s.id
+      LEFT JOIN server_profiles sp ON sp.id = s.server_profile_id
       GROUP BY s.id
       ORDER BY s.connected_at DESC
       LIMIT @limit
@@ -251,10 +320,14 @@ export function listSessionSummaries(limit = 25): SessionSummaryRecord[] {
   return rows.map((row) => ({
     sessionId: row.id,
     transport: row.transport_type,
+    serverProfileId: row.server_profile_id,
+    serverProfileName: row.server_profile_name,
     state: row.status,
     error: row.error_text,
     connectedAt: row.connected_at,
     disconnectedAt: row.disconnected_at,
-    messageCount: row.message_count
+    messageCount: row.message_count,
+    avgLatencyMs: row.avg_latency_ms,
+    errorCount: row.error_count
   }))
 }

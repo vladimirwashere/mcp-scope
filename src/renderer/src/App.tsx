@@ -1,5 +1,5 @@
 import DiscoveryPanel from './components/discovery/DiscoveryPanel'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import ProtocolInspector from './components/inspector/ProtocolInspector'
 import AppShell from './components/layout/AppShell'
 import StatusBar from './components/layout/StatusBar'
@@ -49,6 +49,7 @@ function App(): React.JSX.Element {
   const discoveryError = useDiscoveryStore((state) => state.error)
   const discoveryResult = useDiscoveryStore((state) => state.activeResult)
   const discoveryResultTitle = useDiscoveryStore((state) => state.activeResultTitle)
+  const discoveryResultLatencyMs = useDiscoveryStore((state) => state.activeResultLatencyMs)
   const setDiscoveryTab = useDiscoveryStore((state) => state.setActiveTab)
   const clearDiscoveryResult = useDiscoveryStore((state) => state.clearResult)
   const hydrateDiscovery = useDiscoveryStore((state) => state.hydrateDiscovery)
@@ -68,6 +69,7 @@ function App(): React.JSX.Element {
 
   const sessionId = sessionStatus?.sessionId ?? null
   const sessionState = sessionStatus?.state ?? null
+  const lastDiscoverySessionKeyRef = useRef<string>('')
 
   useEffect(() => {
     let mounted = true
@@ -112,8 +114,14 @@ function App(): React.JSX.Element {
   }, [refreshActiveSessionMessages, sessionId, sessionState, setSessionError])
 
   useEffect(() => {
+    const nextKey = sessionStatus ? `${sessionStatus.sessionId}:${sessionStatus.state}` : 'none'
+    if (lastDiscoverySessionKeyRef.current === nextKey) {
+      return
+    }
+
+    lastDiscoverySessionKeyRef.current = nextKey
     void hydrateDiscovery(sessionStatus)
-  }, [hydrateDiscovery, sessionId, sessionState])
+  }, [hydrateDiscovery, sessionStatus])
 
   useEffect(() => {
     void ingestMessages(sessionId, sessionMessages)
@@ -188,6 +196,7 @@ function App(): React.JSX.Element {
             error={discoveryError}
             activeResult={discoveryResult}
             activeResultTitle={discoveryResultTitle}
+            activeResultLatencyMs={discoveryResultLatencyMs}
             onChangeTab={setDiscoveryTab}
             onReload={() => {
               void hydrateDiscovery(sessionStatus)

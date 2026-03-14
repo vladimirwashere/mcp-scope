@@ -5,17 +5,23 @@ type MessageRow = {
   session_id: string
   direction: 'outbound' | 'inbound'
   payload_json: string
+  latency_ms: number | null
+  is_error: number
   created_at: string
 }
 
 type SessionSummaryRow = {
   id: string
   transport_type: 'stdio'
+  server_profile_id: string | null
+  server_profile_name: string | null
   status: string
   error_text: string | null
   connected_at: string
   disconnected_at: string | null
   message_count: number
+  avg_latency_ms: number | null
+  error_count: number
 }
 
 const state = vi.hoisted(() => ({
@@ -55,6 +61,8 @@ describe('sessionsRepo listSessionMessages', () => {
         session_id: 's-1',
         direction: 'outbound',
         payload_json: '{"id":1,"method":"initialize"}',
+        latency_ms: null,
+        is_error: 0,
         created_at: '2025-01-01T00:00:00.000Z'
       },
       {
@@ -62,6 +70,8 @@ describe('sessionsRepo listSessionMessages', () => {
         session_id: 's-1',
         direction: 'inbound',
         payload_json: '{"id":1,"result":{"ok":true}}',
+        latency_ms: 18,
+        is_error: 0,
         created_at: '2025-01-01T00:00:01.000Z'
       }
     ]
@@ -72,6 +82,7 @@ describe('sessionsRepo listSessionMessages', () => {
     expect(messages[0].id).toBe(2)
     expect(messages[0].direction).toBe('inbound')
     expect(messages[0].payload).toEqual({ id: 1, result: { ok: true } })
+    expect(messages[0].latencyMs).toBe(18)
     expect(messages[1].id).toBe(1)
     expect(messages[1].direction).toBe('outbound')
     expect(messages[1].payload).toEqual({ id: 1, method: 'initialize' })
@@ -84,6 +95,8 @@ describe('sessionsRepo listSessionMessages', () => {
         session_id: 's-2',
         direction: 'outbound',
         payload_json: '{not-json',
+        latency_ms: null,
+        is_error: 1,
         created_at: '2025-01-01T00:00:00.000Z'
       },
       {
@@ -91,6 +104,8 @@ describe('sessionsRepo listSessionMessages', () => {
         session_id: 's-2',
         direction: 'inbound',
         payload_json: '{"ok":true}',
+        latency_ms: null,
+        is_error: 0,
         created_at: '2025-01-01T00:00:01.000Z'
       }
     ]
@@ -102,6 +117,7 @@ describe('sessionsRepo listSessionMessages', () => {
     const allMessages = listSessionMessages('s-2', 100)
     expect(allMessages).toHaveLength(2)
     expect(allMessages[1].payload).toBe('{not-json')
+    expect(allMessages[1].isError).toBe(true)
   })
 
   it('returns session summaries with bounded limit and mapped fields', () => {
@@ -109,20 +125,28 @@ describe('sessionsRepo listSessionMessages', () => {
       {
         id: 's-1',
         transport_type: 'stdio',
+        server_profile_id: 'profile-1',
+        server_profile_name: 'Everything',
         status: 'ready',
         error_text: null,
         connected_at: '2025-01-01T00:00:00.000Z',
         disconnected_at: null,
-        message_count: 3
+        message_count: 3,
+        avg_latency_ms: 24,
+        error_count: 0
       },
       {
         id: 's-2',
         transport_type: 'stdio',
+        server_profile_id: null,
+        server_profile_name: null,
         status: 'error',
         error_text: 'boom',
         connected_at: '2025-01-01T00:00:01.000Z',
         disconnected_at: '2025-01-01T00:00:02.000Z',
-        message_count: 1
+        message_count: 1,
+        avg_latency_ms: null,
+        error_count: 1
       }
     ]
 
@@ -132,11 +156,15 @@ describe('sessionsRepo listSessionMessages', () => {
     expect(summaries[0]).toEqual({
       sessionId: 's-1',
       transport: 'stdio',
+      serverProfileId: 'profile-1',
+      serverProfileName: 'Everything',
       state: 'ready',
       error: null,
       connectedAt: '2025-01-01T00:00:00.000Z',
       disconnectedAt: null,
-      messageCount: 3
+      messageCount: 3,
+      avgLatencyMs: 24,
+      errorCount: 0
     })
   })
 })

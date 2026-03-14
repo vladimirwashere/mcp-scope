@@ -21,10 +21,10 @@ import type {
   SessionStatus
 } from '../../shared/ipc'
 import {
-  countSessionMessages,
   listSessionSummaries,
   listSessionMessages,
   getSessionRecord,
+  getSessionStats,
   insertSessionMessage,
   insertSessionRecord,
   updateSessionRecord
@@ -37,10 +37,34 @@ type RuntimeSession = {
   id: string
   state: SessionState
   transport: SessionTransport
+  serverProfileId?: string
   connectedAt: string
   disconnectedAt?: string
   error?: string
   client: Client
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null
+}
+
+const asJsonRpcId = (value: unknown): string | number | null => {
+  if (typeof value === 'string' || typeof value === 'number') {
+    return value
+  }
+
+  return null
+}
+
+const getDurationMs = (connectedAt: string, disconnectedAt?: string): number => {
+  const startedAt = Date.parse(connectedAt)
+  const endedAt = Date.parse(disconnectedAt ?? new Date().toISOString())
+
+  if (Number.isNaN(startedAt) || Number.isNaN(endedAt)) {
+    return 0
+  }
+
+  return Math.max(0, endedAt - startedAt)
 }
 
 export function transitionSessionState(current: SessionState, event: SessionEvent): SessionState {
@@ -63,6 +87,27 @@ export function transitionSessionState(current: SessionState, event: SessionEven
 export class SessionManager {
   private readonly sessions = new Map<string, RuntimeSession>()
   private readonly messageListeners = new Set<(message: SessionMessage) => void>()
+  private readonly outboundRequestTimes = new Map<string, number>()
+
+  private async runTimedOperation<T>(
+    operation: () => Promise<T>
+  ): Promise<{ value: T; ms: number }> {
+    const startedAt = Date.now()
+    const value = await operation()
+    return {
+      value,
+      ms: Math.max(0, Date.now() - startedAt)
+    }
+  }
+
+  private clearPendingRequestTimes(sessionId: string): void {
+    const prefix = `${sessionId}:`
+    for (const key of this.outboundRequestTimes.keys()) {
+      if (key.startsWith(prefix)) {
+        this.outboundRequestTimes.delete(key)
+      }
+    }
+  }
 
   onMessage(listener: (message: SessionMessage) => void): () => void {
     this.messageListeners.add(listener)
@@ -93,6 +138,8 @@ export class SessionManager {
 
     insertSessionRecord({
       id: sessionId,
+      transportType: input.transport,
+      ...(input.profileId !== undefined ? { serverProfileId: input.profileId } : {}),
       command: persistenceSeed.command,
       args: persistenceSeed.args,
       cwd: persistenceSeed.cwd,
@@ -115,6 +162,7 @@ export class SessionManager {
         id: sessionId,
         state: transitionSessionState('disconnected', 'start-connect'),
         transport: input.transport,
+        ...(input.profileId !== undefined ? { serverProfileId: input.profileId } : {}),
         connectedAt,
         client
       }
@@ -162,6 +210,7 @@ export class SessionManager {
     try {
       await runtime.client.close()
       this.setSessionState(runtime.id, transitionSessionState(runtime.state, 'disconnected'))
+      this.clearPendingRequestTimes(runtime.id)
 
       return { ok: true }
     } catch (error) {
@@ -175,14 +224,21 @@ export class SessionManager {
 
   getStatus(sessionId: string): SessionStatus {
     const runtime = this.sessions.get(sessionId)
+    const stats = getSessionStats(sessionId)
 
     if (runtime) {
       const status: SessionStatus = {
         sessionId: runtime.id,
         state: runtime.state,
         transport: runtime.transport,
+        ...(runtime.serverProfileId !== undefined
+          ? { serverProfileId: runtime.serverProfileId }
+          : {}),
         connectedAt: runtime.connectedAt,
-        messageCount: countSessionMessages(runtime.id)
+        messageCount: stats.messageCount,
+        errorCount: stats.errorCount,
+        ...(stats.avgLatencyMs !== null ? { avgLatencyMs: stats.avgLatencyMs } : {}),
+        durationMs: getDurationMs(runtime.connectedAt, runtime.disconnectedAt)
       }
 
       if (runtime.disconnectedAt !== undefined) {
@@ -205,8 +261,12 @@ export class SessionManager {
       sessionId: persisted.id,
       state: persisted.status as SessionState,
       transport: persisted.transportType,
+      ...(persisted.serverProfileId !== null ? { serverProfileId: persisted.serverProfileId } : {}),
       connectedAt: persisted.connectedAt,
-      messageCount: countSessionMessages(persisted.id)
+      messageCount: stats.messageCount,
+      errorCount: stats.errorCount,
+      ...(stats.avgLatencyMs !== null ? { avgLatencyMs: stats.avgLatencyMs } : {}),
+      durationMs: getDurationMs(persisted.connectedAt, persisted.disconnectedAt ?? undefined)
     }
 
     if (persisted.disconnectedAt !== null) {
@@ -228,6 +288,7 @@ export class SessionManager {
         try {
           await session.client.close()
           this.setSessionState(session.id, 'disconnected')
+          this.clearPendingRequestTimes(session.id)
         } catch (error) {
           this.setSessionError(session.id, getErrorMessage(error))
         }
@@ -253,8 +314,15 @@ export class SessionManager {
         sessionId: session.sessionId,
         state: session.state as SessionState,
         transport: session.transport,
+        ...(session.serverProfileId !== null ? { serverProfileId: session.serverProfileId } : {}),
+        ...(session.serverProfileName !== null
+          ? { serverProfileName: session.serverProfileName }
+          : {}),
         connectedAt: session.connectedAt,
-        messageCount: session.messageCount
+        messageCount: session.messageCount,
+        errorCount: session.errorCount,
+        ...(session.avgLatencyMs !== null ? { avgLatencyMs: session.avgLatencyMs } : {}),
+        durationMs: getDurationMs(session.connectedAt, session.disconnectedAt ?? undefined)
       }
 
       if (session.disconnectedAt !== null) {
@@ -363,33 +431,48 @@ export class SessionManager {
   async callTool(input: DiscoveryCallToolInput): Promise<DiscoveryOperationResult> {
     const runtime = this.getReadyRuntimeSession(input.sessionId)
 
-    const result = await runtime.client.callTool({
-      name: input.name,
-      arguments: input.arguments
-    })
+    const { value, ms } = await this.runTimedOperation(() =>
+      runtime.client.callTool({
+        name: input.name,
+        arguments: input.arguments
+      })
+    )
 
-    return { result }
+    return {
+      result: value,
+      latencyMs: ms
+    }
   }
 
   async readResource(input: DiscoveryReadResourceInput): Promise<DiscoveryOperationResult> {
     const runtime = this.getReadyRuntimeSession(input.sessionId)
 
-    const result = await runtime.client.readResource({
-      uri: input.uri
-    })
+    const { value, ms } = await this.runTimedOperation(() =>
+      runtime.client.readResource({
+        uri: input.uri
+      })
+    )
 
-    return { result }
+    return {
+      result: value,
+      latencyMs: ms
+    }
   }
 
   async getPrompt(input: DiscoveryGetPromptInput): Promise<DiscoveryOperationResult> {
     const runtime = this.getReadyRuntimeSession(input.sessionId)
 
-    const result = await runtime.client.getPrompt({
-      name: input.name,
-      arguments: input.arguments
-    })
+    const { value, ms } = await this.runTimedOperation(() =>
+      runtime.client.getPrompt({
+        name: input.name,
+        arguments: input.arguments
+      })
+    )
 
-    return { result }
+    return {
+      result: value,
+      latencyMs: ms
+    }
   }
 
   private captureMessage(
@@ -399,11 +482,40 @@ export class SessionManager {
   ): void {
     const createdAt = new Date().toISOString()
     const payloadJson = JSON.stringify(message)
+    let latencyMs: number | undefined
+    let isError: boolean | undefined
+
+    if (isRecord(message)) {
+      const id = asJsonRpcId(message['id'])
+      if (id !== null && direction === 'outbound' && typeof message['method'] === 'string') {
+        this.outboundRequestTimes.set(`${sessionId}:${String(id)}`, Date.now())
+      }
+
+      if (
+        id !== null &&
+        direction === 'inbound' &&
+        (Object.hasOwn(message, 'result') || Object.hasOwn(message, 'error'))
+      ) {
+        const key = `${sessionId}:${String(id)}`
+        const startedAt = this.outboundRequestTimes.get(key)
+
+        if (startedAt !== undefined) {
+          latencyMs = Math.max(0, Date.now() - startedAt)
+          this.outboundRequestTimes.delete(key)
+        }
+
+        if (message['error'] !== undefined) {
+          isError = true
+        }
+      }
+    }
 
     const id = insertSessionMessage({
       sessionId,
       direction,
       payloadJson,
+      ...(latencyMs !== undefined ? { latencyMs } : {}),
+      ...(isError === true ? { isError: true } : {}),
       createdAt
     })
 
@@ -412,7 +524,9 @@ export class SessionManager {
       sessionId,
       direction,
       payload: message,
-      createdAt
+      createdAt,
+      ...(latencyMs !== undefined ? { latencyMs } : {}),
+      ...(isError === true ? { isError: true } : {})
     }
 
     for (const listener of this.messageListeners) {
@@ -464,6 +578,7 @@ export class SessionManager {
       disconnectedAt: new Date().toISOString(),
       errorText: errorMessage
     })
+    this.clearPendingRequestTimes(sessionId)
   }
 }
 

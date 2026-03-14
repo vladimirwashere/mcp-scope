@@ -15,6 +15,7 @@ type DiscoveryStoreState = {
   prompts: DiscoveryPrompt[]
   activeResult: unknown | null
   activeResultTitle: string | null
+  activeResultLatencyMs: number | null
   loading: boolean
   error: string | null
   setActiveTab: (tab: DiscoveryTab) => void
@@ -48,6 +49,7 @@ export const useDiscoveryStore = create<DiscoveryStoreState>((set) => ({
   ...clearData,
   activeResult: null,
   activeResultTitle: null,
+  activeResultLatencyMs: null,
   loading: false,
   error: null,
 
@@ -56,7 +58,7 @@ export const useDiscoveryStore = create<DiscoveryStoreState>((set) => ({
   },
 
   clearResult: () => {
-    set({ activeResult: null, activeResultTitle: null })
+    set({ activeResult: null, activeResultTitle: null, activeResultLatencyMs: null })
   },
 
   hydrateDiscovery: async (sessionStatus) => {
@@ -106,7 +108,8 @@ export const useDiscoveryStore = create<DiscoveryStoreState>((set) => ({
       set({
         loading: false,
         activeResult: response.result,
-        activeResultTitle: `Tool result: ${name}`
+        activeResultTitle: `Tool result: ${name}`,
+        activeResultLatencyMs: response.latencyMs ?? null
       })
     } catch (error) {
       set({
@@ -133,7 +136,8 @@ export const useDiscoveryStore = create<DiscoveryStoreState>((set) => ({
       set({
         loading: false,
         activeResult: response.result,
-        activeResultTitle: `Resource: ${uri}`
+        activeResultTitle: `Resource: ${uri}`,
+        activeResultLatencyMs: response.latencyMs ?? null
       })
     } catch (error) {
       set({
@@ -161,7 +165,8 @@ export const useDiscoveryStore = create<DiscoveryStoreState>((set) => ({
       set({
         loading: false,
         activeResult: response.result,
-        activeResultTitle: `Prompt: ${name}`
+        activeResultTitle: `Prompt: ${name}`,
+        activeResultLatencyMs: response.latencyMs ?? null
       })
     } catch (error) {
       set({

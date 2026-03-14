@@ -38,7 +38,8 @@ const readySession: SessionStatus = {
   state: 'ready',
   transport: 'stdio',
   connectedAt: '2026-03-13T00:00:00.000Z',
-  messageCount: 0
+  messageCount: 0,
+  errorCount: 0
 }
 
 const setupWindowApi = (): MockApi => {

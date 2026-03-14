@@ -46,8 +46,6 @@ function toServerProfile(row: ServerProfileRow): ServerProfile {
 }
 
 function normalizeInput(input: UpsertServerProfileInput): UpsertServerProfileInput {
-  const trimmedCwd = input.transport === 'stdio' ? input.cwd?.trim() : undefined
-
   const normalized: UpsertServerProfileInput =
     input.transport === 'stdio'
       ? {
@@ -55,7 +53,7 @@ function normalizeInput(input: UpsertServerProfileInput): UpsertServerProfileInp
           transport: 'stdio',
           command: input.command.trim(),
           args: input.args.map((arg) => arg.trim()).filter((arg) => arg.length > 0),
-          ...(trimmedCwd !== undefined && trimmedCwd.length > 0 ? { cwd: trimmedCwd } : {})
+          cwd: input.cwd.trim()
         }
       : {
           name: input.name.trim(),

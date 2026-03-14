@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => {
   return {
     countSessionMessages: vi.fn(() => 0),
+    getSessionStats: vi.fn(() => ({ messageCount: 0, avgLatencyMs: null, errorCount: 0 })),
     listSessionSummaries: vi.fn(),
     listSessionMessages: vi.fn(),
     getSessionRecord: vi.fn(),
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('../src/main/persistence/sessionsRepo', () => ({
   countSessionMessages: mocks.countSessionMessages,
+  getSessionStats: mocks.getSessionStats,
   listSessionSummaries: mocks.listSessionSummaries,
   listSessionMessages: mocks.listSessionMessages,
   getSessionRecord: mocks.getSessionRecord,
@@ -39,6 +41,7 @@ describe('SessionManager getMessages', () => {
     mocks.getSessionRecord.mockReturnValue({
       id: 'session-1',
       transportType: 'stdio',
+      serverProfileId: null,
       command: 'node',
       args: [],
       cwd: '/tmp',
@@ -95,20 +98,28 @@ describe('SessionManager listSessions', () => {
       {
         sessionId: 'session-1',
         transport: 'stdio',
+        serverProfileId: 'profile-1',
+        serverProfileName: 'Everything',
         state: 'ready',
         error: null,
         connectedAt: '2025-01-01T00:00:00.000Z',
-        disconnectedAt: null,
-        messageCount: 4
+        disconnectedAt: '2025-01-01T00:00:05.000Z',
+        messageCount: 4,
+        avgLatencyMs: 24,
+        errorCount: 0
       },
       {
         sessionId: 'session-2',
         transport: 'stdio',
+        serverProfileId: null,
+        serverProfileName: null,
         state: 'error',
         error: 'boom',
         connectedAt: '2025-01-01T00:00:00.000Z',
         disconnectedAt: '2025-01-01T00:00:10.000Z',
-        messageCount: 2
+        messageCount: 2,
+        avgLatencyMs: null,
+        errorCount: 1
       }
     ])
 
@@ -121,8 +132,14 @@ describe('SessionManager listSessions', () => {
         sessionId: 'session-1',
         state: 'ready',
         transport: 'stdio',
+        serverProfileId: 'profile-1',
+        serverProfileName: 'Everything',
         connectedAt: '2025-01-01T00:00:00.000Z',
-        messageCount: 4
+        disconnectedAt: '2025-01-01T00:00:05.000Z',
+        messageCount: 4,
+        errorCount: 0,
+        avgLatencyMs: 24,
+        durationMs: 5000
       },
       {
         sessionId: 'session-2',
@@ -131,7 +148,9 @@ describe('SessionManager listSessions', () => {
         connectedAt: '2025-01-01T00:00:00.000Z',
         disconnectedAt: '2025-01-01T00:00:10.000Z',
         error: 'boom',
-        messageCount: 2
+        messageCount: 2,
+        errorCount: 1,
+        durationMs: 10000
       }
     ])
   })

@@ -10,8 +10,49 @@ const ACTIVE_MESSAGE_LIMIT = 100
 
 let unsubscribeMessageStream: (() => void) | null = null
 
+const toSessionSummary = (status: SessionStatus): SessionSummary => {
+  const summary: SessionSummary = {
+    sessionId: status.sessionId,
+    state: status.state,
+    transport: status.transport,
+    connectedAt: status.connectedAt,
+    messageCount: status.messageCount,
+    errorCount: status.errorCount
+  }
+
+  if (status.serverProfileId !== undefined) {
+    summary.serverProfileId = status.serverProfileId
+  }
+
+  if (status.serverProfileName !== undefined) {
+    summary.serverProfileName = status.serverProfileName
+  }
+
+  if (status.disconnectedAt !== undefined) {
+    summary.disconnectedAt = status.disconnectedAt
+  }
+
+  if (status.error !== undefined) {
+    summary.error = status.error
+  }
+
+  if (status.avgLatencyMs !== undefined) {
+    summary.avgLatencyMs = status.avgLatencyMs
+  }
+
+  if (status.durationMs !== undefined) {
+    summary.durationMs = status.durationMs
+  }
+
+  return summary
+}
+
 const ensureMessageStreamSubscription = (
-  set: (partial: Partial<SessionStoreState> | ((state: SessionStoreState) => Partial<SessionStoreState> | SessionStoreState)) => void
+  set: (
+    partial:
+      | Partial<SessionStoreState>
+      | ((state: SessionStoreState) => Partial<SessionStoreState> | SessionStoreState)
+  ) => void
 ): void => {
   if (unsubscribeMessageStream !== null) {
     return
@@ -138,7 +179,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
               return window.api.connectSession({
                 transport: 'stdio',
-                stdio: stdioInput
+                stdio: stdioInput,
+                profileId: profile.id
               })
             })()
           : await (() => {
@@ -155,7 +197,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
               return window.api.connectSession({
                 transport: 'sse',
-                sse: sseInput
+                sse: sseInput,
+                profileId: profile.id
               })
             })()
 
@@ -263,23 +306,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         return session
       }
 
-      const updated: SessionSummary = {
-        sessionId: status.sessionId,
-        state: status.state,
-        transport: status.transport,
-        connectedAt: status.connectedAt,
-        messageCount: status.messageCount
-      }
-
-      if (status.disconnectedAt !== undefined) {
-        updated.disconnectedAt = status.disconnectedAt
-      }
-
-      if (status.error !== undefined) {
-        updated.error = status.error
-      }
-
-      return updated
+      return toSessionSummary(status)
     })
 
     set({

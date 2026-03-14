@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 type ResultRendererProps = {
   title?: string | null
   result: unknown
+  latencyMs?: number | null
   onClear: () => void
 }
 
@@ -58,7 +59,12 @@ function JsonNode({
   )
 }
 
-function ResultRenderer({ title, result, onClear }: ResultRendererProps): React.JSX.Element {
+function ResultRenderer({
+  title,
+  result,
+  latencyMs,
+  onClear
+}: ResultRendererProps): React.JSX.Element {
   const [isRawView, setIsRawView] = useState(false)
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
 
@@ -80,7 +86,14 @@ function ResultRenderer({ title, result, onClear }: ResultRendererProps): React.
   return (
     <div className="mt-3 rounded border border-slate-800 bg-slate-950/60 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-slate-300">{title ?? 'Result'}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-xs font-medium text-slate-300">{title ?? 'Result'}</p>
+          {latencyMs !== null && latencyMs !== undefined ? (
+            <span className="rounded border border-emerald-700/70 bg-emerald-950/40 px-2 py-0.5 text-[11px] text-emerald-300">
+              {Math.round(latencyMs)} ms
+            </span>
+          ) : null}
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => {

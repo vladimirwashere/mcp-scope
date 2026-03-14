@@ -43,6 +43,31 @@ const includesText = (payload: unknown, searchFilter: string): boolean => {
   return JSON.stringify(payload).toLowerCase().includes(search)
 }
 
+type SessionHistoryGroup = {
+  key: string
+  label: string
+  sessions: SessionSummary[]
+}
+
+const formatDuration = (durationMs?: number): string => {
+  if (durationMs === undefined) {
+    return 'active'
+  }
+
+  if (durationMs < 1000) {
+    return `${durationMs} ms`
+  }
+
+  const seconds = Math.round(durationMs / 1000)
+  if (seconds < 60) {
+    return `${seconds}s`
+  }
+
+  const minutes = Math.floor(seconds / 60)
+  const remSeconds = seconds % 60
+  return `${minutes}m ${remSeconds}s`
+}
+
 const VIRTUAL_ROW_HEIGHT = 72
 const VIRTUAL_VIEWPORT_HEIGHT = 224
 const VIRTUAL_OVERSCAN = 6
@@ -117,6 +142,29 @@ function ProtocolInspector({
       bottomSpacerHeight: (filteredMessages.length - endIndex) * VIRTUAL_ROW_HEIGHT
     }
   }, [filteredMessages, virtualScrollTop])
+
+  const groupedHistory = useMemo<SessionHistoryGroup[]>(() => {
+    const groups = new Map<string, SessionHistoryGroup>()
+
+    for (const session of sessionHistory) {
+      const key = session.serverProfileId ?? `adhoc:${session.transport}`
+      const label = session.serverProfileName ?? session.serverProfileId ?? 'Direct Connections'
+
+      const existing = groups.get(key)
+      if (existing) {
+        existing.sessions.push(session)
+        continue
+      }
+
+      groups.set(key, {
+        key,
+        label,
+        sessions: [session]
+      })
+    }
+
+    return [...groups.values()]
+  }, [sessionHistory])
 
   return (
     <>
@@ -215,38 +263,43 @@ function ProtocolInspector({
                 <>
                   {topSpacerHeight > 0 ? <div style={{ height: `${topSpacerHeight}px` }} /> : null}
                   {visibleMessages.map((message) => {
-                  const method = getPayloadMethod(message.payload)
+                    const method = getPayloadMethod(message.payload)
 
-                  return (
-                    <button
-                      key={message.id}
-                      onClick={() => {
-                        setSelectedMessageId(message.id)
-                      }}
-                      className={`w-full rounded border p-2 text-left ${
-                        selectedMessage?.id === message.id
-                          ? 'border-slate-500 bg-slate-800/70'
-                          : 'border-slate-800 bg-slate-900/50'
-                      }`}
-                      style={{ minHeight: `${VIRTUAL_ROW_HEIGHT}px` }}
-                    >
-                      <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.08em]">
-                        <span
-                          className={
-                            message.direction === 'outbound' ? 'text-emerald-400' : 'text-sky-400'
-                          }
-                        >
-                          {message.direction}
-                        </span>
-                        <span className="text-slate-500">
-                          {new Date(message.createdAt).toLocaleTimeString()}
-                        </span>
-                      </div>
-                      <div className="mt-1 truncate text-xs text-slate-300">
-                        {method ?? '(no method field)'}
-                      </div>
-                    </button>
-                  )
+                    return (
+                      <button
+                        key={message.id}
+                        onClick={() => {
+                          setSelectedMessageId(message.id)
+                        }}
+                        className={`w-full rounded border p-2 text-left ${
+                          selectedMessage?.id === message.id
+                            ? 'border-slate-500 bg-slate-800/70'
+                            : 'border-slate-800 bg-slate-900/50'
+                        }`}
+                        style={{ minHeight: `${VIRTUAL_ROW_HEIGHT}px` }}
+                      >
+                        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.08em]">
+                          <span
+                            className={
+                              message.direction === 'outbound' ? 'text-emerald-400' : 'text-sky-400'
+                            }
+                          >
+                            {message.direction}
+                          </span>
+                          <span className="text-slate-500">
+                            {new Date(message.createdAt).toLocaleTimeString()}
+                          </span>
+                        </div>
+                        <div className="mt-1 truncate text-xs text-slate-300">
+                          {method ?? '(no method field)'}
+                        </div>
+                        {message.latencyMs !== undefined ? (
+                          <div className="mt-1 text-[11px] text-emerald-300">
+                            {Math.round(message.latencyMs)} ms
+                          </div>
+                        ) : null}
+                      </button>
+                    )
                   })}
                   {bottomSpacerHeight > 0 ? (
                     <div style={{ height: `${bottomSpacerHeight}px` }} />
@@ -263,6 +316,20 @@ function ProtocolInspector({
                       <span className="uppercase">{selectedMessage.direction}</span>
                       {' • '}
                       {getPayloadMethod(selectedMessage.payload) ?? '(no method field)'}
+                      {selectedMessage.latencyMs !== undefined ? (
+                        <>
+                          {' • '}
+                          <span className="text-emerald-300">
+                            {Math.round(selectedMessage.latencyMs)} ms
+                          </span>
+                        </>
+                      ) : null}
+                      {selectedMessage.isError ? (
+                        <>
+                          {' • '}
+                          <span className="text-rose-300">error</span>
+                        </>
+                      ) : null}
                     </div>
                     <button
                       onClick={() => {
@@ -286,33 +353,51 @@ function ProtocolInspector({
               )}
             </div>
           </div>
-
-          <div className="mt-3 max-h-40 space-y-2 overflow-auto rounded border border-slate-800 bg-slate-950/60 p-2">
-            {sessionHistory.length === 0 ? (
-              <p className="text-xs text-slate-500">No recent sessions.</p>
-            ) : (
-              sessionHistory.map((session) => (
-                <button
-                  key={session.sessionId}
-                  onClick={() => onInspectSession(session.sessionId)}
-                  className={`w-full rounded border p-2 text-left text-xs ${
-                    sessionStatus.sessionId === session.sessionId
-                      ? 'border-slate-500 bg-slate-800/70'
-                      : 'border-slate-800 bg-slate-900/40'
-                  }`}
-                >
-                  <p className="font-medium text-slate-300">{session.sessionId}</p>
-                  <p className="mt-1 text-slate-500">
-                    {session.state} • {session.messageCount} messages
-                  </p>
-                </button>
-              ))
-            )}
-          </div>
         </div>
       ) : (
         <p className="mt-2 text-sm text-slate-500">No session traffic yet.</p>
       )}
+
+      <div className="mt-3 max-h-48 space-y-3 overflow-auto rounded border border-slate-800 bg-slate-950/60 p-2">
+        {groupedHistory.length === 0 ? (
+          <p className="text-xs text-slate-500">No recent sessions.</p>
+        ) : (
+          groupedHistory.map((group) => (
+            <div key={group.key} className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                {group.label}
+              </p>
+              <div className="space-y-2">
+                {group.sessions.map((session) => (
+                  <button
+                    key={session.sessionId}
+                    onClick={() => onInspectSession(session.sessionId)}
+                    className={`w-full rounded border p-2 text-left text-xs ${
+                      sessionStatus?.sessionId === session.sessionId
+                        ? 'border-slate-500 bg-slate-800/70'
+                        : 'border-slate-800 bg-slate-900/40'
+                    }`}
+                  >
+                    <p className="font-medium text-slate-300">{session.sessionId}</p>
+                    <p className="mt-1 text-slate-500">
+                      {session.state} • {session.messageCount} messages • errors{' '}
+                      {session.errorCount}
+                    </p>
+                    <p className="mt-1 text-slate-500">
+                      duration {formatDuration(session.durationMs)}
+                      {session.avgLatencyMs !== undefined ? (
+                        <> • avg latency {Math.round(session.avgLatencyMs)} ms</>
+                      ) : (
+                        ' • avg latency n/a'
+                      )}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
       {sessionError ? <p className="mt-2 text-xs text-rose-400">{sessionError}</p> : null}
     </>
   )

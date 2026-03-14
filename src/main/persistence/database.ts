@@ -39,6 +39,7 @@ function openDatabase(): Database.Database {
     CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
       transport_type TEXT NOT NULL,
+      server_profile_id TEXT,
       command TEXT NOT NULL,
       args_json TEXT NOT NULL,
       cwd TEXT NOT NULL,
@@ -54,6 +55,8 @@ function openDatabase(): Database.Database {
       session_id TEXT NOT NULL,
       direction TEXT NOT NULL,
       payload_json TEXT NOT NULL,
+      latency_ms REAL,
+      is_error INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
     );
@@ -66,6 +69,9 @@ function openDatabase(): Database.Database {
   addColumnIfMissing(instance, 'server_profiles', "transport_type TEXT NOT NULL DEFAULT 'stdio'")
   addColumnIfMissing(instance, 'server_profiles', 'url TEXT')
   addColumnIfMissing(instance, 'server_profiles', 'headers_json TEXT')
+  addColumnIfMissing(instance, 'sessions', 'server_profile_id TEXT')
+  addColumnIfMissing(instance, 'messages', 'latency_ms REAL')
+  addColumnIfMissing(instance, 'messages', 'is_error INTEGER NOT NULL DEFAULT 0')
 
   return instance
 }

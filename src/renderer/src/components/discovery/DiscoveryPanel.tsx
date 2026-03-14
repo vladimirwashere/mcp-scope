@@ -17,6 +17,7 @@ type DiscoveryPanelProps = {
   error: string | null
   activeResult: unknown | null
   activeResultTitle: string | null
+  activeResultLatencyMs: number | null
   onChangeTab: (tab: 'tools' | 'resources' | 'prompts') => void
   onReload: () => void
   onInvokeTool: (name: string, args: Record<string, unknown>) => void
@@ -115,6 +116,7 @@ function DiscoveryPanel({
   error,
   activeResult,
   activeResultTitle,
+  activeResultLatencyMs,
   onChangeTab,
   onReload,
   onInvokeTool,
@@ -245,7 +247,12 @@ function DiscoveryPanel({
       ) : null}
 
       {activeResult ? (
-        <ResultRenderer title={activeResultTitle} result={activeResult} onClear={onClearResult} />
+        <ResultRenderer
+          title={activeResultTitle}
+          result={activeResult}
+          latencyMs={activeResultLatencyMs}
+          onClear={onClearResult}
+        />
       ) : null}
     </div>
   )

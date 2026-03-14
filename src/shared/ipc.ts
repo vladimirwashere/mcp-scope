@@ -49,7 +49,7 @@ export type UpsertServerProfileInput =
       transport: 'stdio'
       command: string
       args: string[]
-      cwd?: string
+      cwd: string
     }
   | {
       id?: string
@@ -89,10 +89,12 @@ export type SessionConnectInput =
   | {
       transport: 'stdio'
       stdio: StdioConnectInput
+      profileId?: string
     }
   | {
       transport: 'sse'
       sse: SseConnectInput
+      profileId?: string
     }
 
 export type SessionConnectResponse = {
@@ -108,10 +110,15 @@ export type SessionStatus = {
   sessionId: string
   state: SessionState
   transport: SessionTransport
+  serverProfileId?: string
+  serverProfileName?: string
   connectedAt: string
   disconnectedAt?: string
   error?: string
   messageCount: number
+  errorCount: number
+  avgLatencyMs?: number
+  durationMs?: number
 }
 
 export type SessionStatusInput = {
@@ -126,6 +133,8 @@ export type SessionMessage = {
   direction: SessionMessageDirection
   payload: unknown
   createdAt: string
+  latencyMs?: number
+  isError?: boolean
 }
 
 export type SessionMessagesInput = {
@@ -143,10 +152,15 @@ export type SessionSummary = {
   sessionId: string
   state: SessionState
   transport: SessionTransport
+  serverProfileId?: string
+  serverProfileName?: string
   connectedAt: string
   disconnectedAt?: string
   error?: string
   messageCount: number
+  errorCount: number
+  avgLatencyMs?: number
+  durationMs?: number
 }
 
 export type SessionListInput = {
@@ -215,6 +229,7 @@ export type DiscoveryGetPromptInput = {
 
 export type DiscoveryOperationResult = {
   result: unknown
+  latencyMs?: number
 }
 
 export type AppApi = {
