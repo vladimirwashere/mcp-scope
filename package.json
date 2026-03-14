@@ -57,6 +57,9 @@
     "vitest": "^4.1.0"
   },
   "pnpm": {
+    "overrides": {
+      "yauzl": "3.2.1"
+    },
     "onlyBuiltDependencies": [
       "electron",
       "esbuild"
