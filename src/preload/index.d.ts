@@ -1,9 +1,12 @@
-import { ElectronAPI } from '@electron-toolkit/preload'
 import type { AppApi } from '../shared/ipc'
 
 declare global {
   interface Window {
-    electron: ElectronAPI
+    electron: {
+      process: {
+        versions: NodeJS.ProcessVersions
+      }
+    }
     api: AppApi
   }
 }

@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
 import { IPC_CHANNELS, type AppApi } from '../shared/ipc'
+
+const electron = {
+  process: {
+    versions: process.versions
+  }
+}
 
 // Custom APIs for renderer
 const api: AppApi = {
@@ -40,14 +45,19 @@ const api: AppApi = {
 // just add to the DOM global.
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
+    contextBridge.exposeInMainWorld('electron', electron)
+  } catch (error) {
+    console.error('Failed to expose window.electron', error)
+  }
+
+  try {
     contextBridge.exposeInMainWorld('api', api)
   } catch (error) {
-    console.error(error)
+    console.error('Failed to expose window.api', error)
   }
 } else {
   // @ts-ignore (define in dts)
-  window.electron = electronAPI
+  window.electron = electron
   // @ts-ignore (define in dts)
   window.api = api
 }
